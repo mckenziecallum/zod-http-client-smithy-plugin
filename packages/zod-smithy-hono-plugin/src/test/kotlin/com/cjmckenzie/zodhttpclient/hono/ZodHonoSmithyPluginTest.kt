@@ -26,6 +26,7 @@ class ZodHonoSmithyPluginTest {
             .contains("import { Hono } from 'hono';")
             .contains("export type HonoHandlers = {")
             .contains("createItem(input: z.output<typeof CreateItemInput>, c: Context)")
+            .contains("z.output<typeof CreateItemOutput> | Promise<z.output<typeof CreateItemOutput>>")
             .contains("app.post('/items/:itemType/:itemId', async (c) => {")
             .contains("app.get('/items/:itemId', async (c) => {")
             .contains("CreateItemInput.parse(await readInput(c")
@@ -38,9 +39,9 @@ class ZodHonoSmithyPluginTest {
         val index = executePlugin().getFileString("index.ts").get()
 
         assertThat(index)
-            .contains("export { createHonoRouter } from './hono-router';")
-            .contains("export type { HonoHandlers } from './hono-router';")
-            .contains("export { GetItemInput } from './GetItemInput';")
+            .contains("export { createHonoRouter } from './hono-router.js';")
+            .contains("export type { HonoHandlers } from './hono-router.js';")
+            .contains("export { GetItemInput } from './GetItemInput.js';")
     }
 
     private fun executePlugin(): MockManifest {

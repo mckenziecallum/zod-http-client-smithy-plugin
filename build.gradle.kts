@@ -9,7 +9,14 @@ allprojects {
     version = "1.0.0"
 }
 
-subprojects {
+val packageProjectNames =
+    setOf(
+        "zod-smithy-core",
+        "zod-smithy-client-plugin",
+        "zod-smithy-hono-plugin",
+    )
+
+configure(subprojects.filter { it.name in packageProjectNames }) {
     apply(plugin = "java-library")
     apply(plugin = "maven-publish")
     apply(plugin = "checkstyle")

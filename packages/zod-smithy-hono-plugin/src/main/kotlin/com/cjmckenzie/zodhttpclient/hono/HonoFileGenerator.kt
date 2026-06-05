@@ -18,16 +18,16 @@ class HonoFileGenerator {
                 appendLine("import type { Context } from 'hono';")
                 appendLine("import { z } from 'zod';")
                 operations.forEach { operation ->
-                    appendLine("import { ${operation.operationName}Input } from './${operation.operationName}Input';")
+                    appendLine("import { ${operation.operationName}Input } from './${operation.operationName}Input.js';")
                     operation.outputSchema?.let {
-                        appendLine("import { ${operation.operationName}Output } from './${operation.operationName}Output';")
+                        appendLine("import { ${operation.operationName}Output } from './${operation.operationName}Output.js';")
                     }
                 }
                 appendLine()
                 appendLine("export type HonoHandlers = {")
                 operations.forEach { operation ->
                     val outputType =
-                        operation.outputSchema?.let { "z.input<typeof ${operation.operationName}Output>" }
+                        operation.outputSchema?.let { "z.output<typeof ${operation.operationName}Output>" }
                             ?: "unknown"
                     appendLine(
                         "  ${operation.methodName}(input: z.output<typeof ${operation.operationName}Input>, c: Context): " +
@@ -101,21 +101,21 @@ class HonoFileGenerator {
         val content =
             buildString {
                 operations.forEach { operation ->
-                    appendLine("export { ${operation.operationName}Input } from './${operation.operationName}Input';")
+                    appendLine("export { ${operation.operationName}Input } from './${operation.operationName}Input.js';")
                     appendLine(
                         "export type { ${operation.operationName}Input as ${operation.operationName}InputType } " +
-                            "from './${operation.operationName}Input';",
+                            "from './${operation.operationName}Input.js';",
                     )
                     operation.outputSchema?.let {
-                        appendLine("export { ${operation.operationName}Output } from './${operation.operationName}Output';")
+                        appendLine("export { ${operation.operationName}Output } from './${operation.operationName}Output.js';")
                         appendLine(
                             "export type { ${operation.operationName}Output as ${operation.operationName}OutputType } " +
-                                "from './${operation.operationName}Output';",
+                                "from './${operation.operationName}Output.js';",
                         )
                     }
                 }
-                appendLine("export { createHonoRouter } from './hono-router';")
-                appendLine("export type { HonoHandlers } from './hono-router';")
+                appendLine("export { createHonoRouter } from './hono-router.js';")
+                appendLine("export type { HonoHandlers } from './hono-router.js';")
             }
 
         fileManifest.writeFile("index.ts", content)

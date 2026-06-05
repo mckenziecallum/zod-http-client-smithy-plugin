@@ -4,7 +4,7 @@ import { createHonoRouter, type HonoHandlers } from './generated';
 const handlers: HonoHandlers = {
   async getItem(input) {
     return {
-      itemId: input.itemId,
+      itemId: input.path.itemId,
       name: 'Example item',
     };
   },
