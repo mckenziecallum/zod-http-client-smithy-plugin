@@ -45,6 +45,22 @@ publishing {
             from(components["java"])
         }
     }
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/mckenziecallum/zod-http-client-smithy-plugin")
+            credentials {
+                username =
+                    providers.gradleProperty("gpr.user")
+                        .orElse(providers.environmentVariable("GITHUB_ACTOR"))
+                        .orNull
+                password =
+                    providers.gradleProperty("gpr.key")
+                        .orElse(providers.environmentVariable("GITHUB_TOKEN"))
+                        .orNull
+            }
+        }
+    }
 }
 
 configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {

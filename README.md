@@ -26,9 +26,20 @@ Publish this project to your local Maven repository:
 gradle publishToMavenLocal
 ```
 
-Then add it to the Smithy build classpath for the project that owns your model:
+Then add GitHub Packages and the plugin dependency to the Smithy build classpath for the project that owns your model:
 
 ```kotlin
+repositories {
+    mavenCentral()
+    maven {
+        url = uri("https://maven.pkg.github.com/mckenziecallum/zod-http-client-smithy-plugin")
+        credentials {
+            username = providers.gradleProperty("gpr.user").orNull
+            password = providers.gradleProperty("gpr.key").orNull
+        }
+    }
+}
+
 dependencies {
     implementation("com.cjmckenzie:zod-http-client-smithy-plugin:1.0.0")
 }
