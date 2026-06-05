@@ -1,0 +1,8 @@
+{
+    "version": "1.0",
+    "plugins": {
+        "zod-schema": {
+            "service": "com.example.test#TestService"
+        }
+    }
+}
