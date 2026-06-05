@@ -1,0 +1,8 @@
+{
+  "version": "1.0",
+  "plugins": {
+    "zod-hono": {
+      "service": "com.example#ExampleService"
+    }
+  }
+}

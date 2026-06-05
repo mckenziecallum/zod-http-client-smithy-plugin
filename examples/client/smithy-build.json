@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "plugins": {
+    "zod-client": {
+      "service": "com.example#ExampleService",
+      "client": ["axios", "fetch"]
+    }
+  }
+}

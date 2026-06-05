@@ -1,10 +1,10 @@
-# ZodHttpClientSmithyPlugin
+# Zod Smithy TypeScript
 
-A Smithy build plugin that generates type-safe, Zod-validated HTTP clients from Smithy models. Point it at any `@restJson1` service and get validated request objects, response parsing, typed errors, and ready-to-use axios/fetch clients.
+Smithy build plugins that generate type-safe, Zod-validated TypeScript adapters from Smithy models. Point them at any `@restJson1` service and generate validated axios/fetch clients or Hono server routes.
 
 ## What It Generates
 
-For a Smithy service with operations like `GetSpace`, `CreateSpace`, etc., the plugin generates:
+For a Smithy service with operations like `GetSpace`, `CreateSpace`, etc., the client plugin generates:
 
 ```
 {Operation}Input.ts     — Zod schema that validates input and decomposes into HTTP parts
@@ -13,6 +13,15 @@ errors.ts               — Typed exception classes from Smithy @error shapes
 axios-client.ts         — Typed axios client (optional)
 fetch-client.ts         — Typed fetch client (optional)
 utils.ts                — ServiceError base class, fromAxios/fromFetch adapters
+index.ts                — Barrel exports
+```
+
+The Hono plugin generates:
+
+```
+{Operation}Input.ts     — Zod schema that validates inbound HTTP data
+{Operation}Output.ts    — Zod schema that validates handler output
+hono-router.ts          — Hono router factory and typed handler interface
 index.ts                — Barrel exports
 ```
 
@@ -41,7 +50,15 @@ repositories {
 }
 
 dependencies {
-    implementation("com.cjmckenzie:zod-http-client-smithy-plugin:1.0.0")
+    implementation("com.cjmckenzie:zod-smithy-client-plugin:1.0.0")
+}
+```
+
+For Hono server generation, use:
+
+```kotlin
+dependencies {
+    implementation("com.cjmckenzie:zod-smithy-hono-plugin:1.0.0")
 }
 ```
 
@@ -50,9 +67,21 @@ dependencies {
 ```json
 {
   "plugins": {
-    "zod-schema": {
+    "zod-client": {
       "service": "com.example#MyService",
       "client": ["axios"]
+    }
+  }
+}
+```
+
+For Hono:
+
+```json
+{
+  "plugins": {
+    "zod-hono": {
+      "service": "com.example#MyService"
     }
   }
 }
@@ -64,7 +93,7 @@ dependencies {
 gradle build
 ```
 
-Generated files appear in `build/smithyprojections/<package>/source/zod-schema/`.
+Generated files appear in `build/smithyprojections/<package>/source/zod-client/`.
 
 ### 3. Use
 
@@ -92,12 +121,18 @@ try {
 
 ## Configuration
 
-The `"zod-schema"` plugin accepts these settings in `smithy-build.json`:
+The `"zod-client"` plugin accepts these settings in `smithy-build.json`:
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
 | `service` | `string` | **required** | Fully qualified Smithy service shape ID |
 | `client` | `string[]` | `["axios"]` | Which client wrappers to generate. Values: `"axios"`, `"fetch"` |
+
+The `"zod-hono"` plugin accepts these settings in `smithy-build.json`:
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `service` | `string` | **required** | Fully qualified Smithy service shape ID |
 
 ### Examples
 
@@ -105,7 +140,7 @@ Generate only a fetch client:
 
 ```json
 {
-  "zod-schema": {
+  "zod-client": {
     "service": "com.example#MyService",
     "client": ["fetch"]
   }
@@ -116,7 +151,7 @@ Generate both:
 
 ```json
 {
-  "zod-schema": {
+  "zod-client": {
     "service": "com.example#MyService",
     "client": ["axios", "fetch"]
   }
@@ -327,7 +362,7 @@ To publish the generated code as a consumable npm package:
 
 ```
 MyServiceAxiosClient/
-├── smithy-build.json         # zod-schema plugin config
+├── smithy-build.json         # zod-client plugin config
 ├── build.gradle.kts          # smithy build -> copy schemas -> npm install -> tsc
 ├── settings.gradle.kts
 └── npm-config/
@@ -345,7 +380,7 @@ plugins {
 tasks {
     val copyZodSchemas by registering(Copy::class) {
         dependsOn("smithyBuild")
-        from(layout.buildDirectory.dir("smithyprojections/my-service/source/zod-schema"))
+        from(layout.buildDirectory.dir("smithyprojections/my-service/source/zod-client"))
         into(layout.buildDirectory.dir("zod-client/src"))
     }
 
@@ -384,23 +419,11 @@ gradle test           # Tests only
 ### Project structure
 
 ```
-src/main/kotlin/com/cjmckenzie/zodhttpclient/
-├── ZodHttpClientSmithyPlugin.kt    # Plugin entry point, config parsing
-├── analyzers/
-│   ├── HttpBindingAnalyzer.kt      # Classifies fields by HTTP binding trait
-│   └── OperationAnalyzer.kt        # Discovers operations in a service
-├── builders/
-│   └── SchemaBuilder.kt            # Builds input/output TypeScript schemas
-├── core/
-│   ├── FileGenerator.kt            # Writes all generated TypeScript files
-│   └── TypeSafeSchemaGenerator.kt  # Orchestrates schema generation per operation
-├── mappers/
-│   ├── TypeSafeConstraintMapper.kt # Applies @length, @range, @pattern constraints
-│   └── TypeSafeMapper.kt           # Maps Smithy shapes to Zod types
-├── models/
-│   ├── ErrorShapeInfo.kt           # Error shape data model
-│   ├── HttpBindingAnalysis.kt      # HTTP binding classification result
-│   └── ParameterInfo.kt            # Parameter metadata
-└── types/
-    └── ZodType.kt                  # Sealed class hierarchy for Zod type rendering
+packages/
+├── zod-smithy-core/                # Smithy analysis and Zod schema generation
+├── zod-smithy-client-plugin/       # zod-client axios/fetch Smithy plugin
+└── zod-smithy-hono-plugin/         # zod-hono Hono server Smithy plugin
+examples/
+├── client/                         # Client plugin config example
+└── hono/                           # Hono plugin config and handler example
 ```
