@@ -29,6 +29,19 @@ jobs:
           java-version: "21"
           cache: gradle
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+          run_install: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: examples/hono/pnpm-lock.yaml
+
       - name: Build
         run: ./gradlew build --no-daemon
 
