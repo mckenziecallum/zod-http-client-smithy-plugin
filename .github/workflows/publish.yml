@@ -62,6 +62,14 @@ jobs:
           java-version: "21"
           cache: gradle
 
+      - name: Resolve package version
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "PROJECT_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          else
+            echo "PROJECT_VERSION=1.0.0-ci.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
+          fi
+
       - name: Publish to GitHub Packages
         run: ./gradlew publish --no-daemon
         env:

@@ -6,7 +6,11 @@ plugins {
 
 allprojects {
     group = "com.cjmckenzie"
-    version = "1.0.0"
+    version =
+        providers.gradleProperty("projectVersion")
+            .orElse(providers.environmentVariable("PROJECT_VERSION"))
+            .orElse("1.0.0-SNAPSHOT")
+            .get()
 }
 
 val packageProjectNames =
