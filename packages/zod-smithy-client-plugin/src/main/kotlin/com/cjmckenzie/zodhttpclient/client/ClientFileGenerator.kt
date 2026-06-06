@@ -50,7 +50,7 @@ class ClientFileGenerator {
         val content =
             buildString {
                 appendLine("import { z } from 'zod';")
-                appendLine("import { ServiceError } from './utils';")
+                appendLine("import { ServiceError } from './utils.js';")
                 appendLine()
 
                 // Generate a Zod schema + class per error shape
@@ -121,15 +121,15 @@ class ClientFileGenerator {
             buildString {
                 appendLine("import type { AxiosInstance, AxiosError } from 'axios';")
                 appendLine("import { z } from 'zod';")
-                appendLine("import { fromAxios } from './utils';")
+                appendLine("import { fromAxios } from './utils.js';")
                 if (hasErrors) {
-                    appendLine("import { parseServiceError } from './errors';")
+                    appendLine("import { parseServiceError } from './errors.js';")
                 }
 
                 methods.forEach { method ->
-                    appendLine("import { ${method.inputSchemaName} } from './${method.inputSchemaName}';")
+                    appendLine("import { ${method.inputSchemaName} } from './${method.inputSchemaName}.js';")
                     if (method.outputSchemaName != null) {
-                        appendLine("import { ${method.outputSchemaName} } from './${method.outputSchemaName}';")
+                        appendLine("import { ${method.outputSchemaName} } from './${method.outputSchemaName}.js';")
                     }
                 }
 
@@ -181,15 +181,15 @@ class ClientFileGenerator {
         val content =
             buildString {
                 appendLine("import { z } from 'zod';")
-                appendLine("import { fromFetch } from './utils';")
+                appendLine("import { fromFetch } from './utils.js';")
                 if (hasErrors) {
-                    appendLine("import { parseServiceError } from './errors';")
+                    appendLine("import { parseServiceError } from './errors.js';")
                 }
 
                 methods.forEach { method ->
-                    appendLine("import { ${method.inputSchemaName} } from './${method.inputSchemaName}';")
+                    appendLine("import { ${method.inputSchemaName} } from './${method.inputSchemaName}.js';")
                     if (method.outputSchemaName != null) {
-                        appendLine("import { ${method.outputSchemaName} } from './${method.outputSchemaName}';")
+                        appendLine("import { ${method.outputSchemaName} } from './${method.outputSchemaName}.js';")
                     }
                 }
 
@@ -246,25 +246,25 @@ class ClientFileGenerator {
         val content =
             buildString {
                 operationNames.forEach { name ->
-                    appendLine("export { ${name}Input } from './${name}Input';")
-                    appendLine("export type { ${name}Input as ${name}InputType } from './${name}Input';")
+                    appendLine("export { ${name}Input } from './${name}Input.js';")
+                    appendLine("export type { ${name}Input as ${name}InputType } from './${name}Input.js';")
                 }
                 outputOperationNames.forEach { name ->
-                    appendLine("export { ${name}Output } from './${name}Output';")
-                    appendLine("export type { ${name}Output as ${name}OutputType } from './${name}Output';")
+                    appendLine("export { ${name}Output } from './${name}Output.js';")
+                    appendLine("export type { ${name}Output as ${name}OutputType } from './${name}Output.js';")
                 }
                 if (errorNames.isNotEmpty()) {
                     val errorExports = errorNames.joinToString(", ") { it }
                     val schemaExports = errorNames.joinToString(", ") { "${it}Schema" }
-                    appendLine("export { $errorExports, $schemaExports, parseServiceError } from './errors';")
+                    appendLine("export { $errorExports, $schemaExports, parseServiceError } from './errors.js';")
                 }
-                appendLine("export { ServiceError, fromAxios, fromFetch } from './utils';")
-                appendLine("export type { RawResponse } from './utils';")
+                appendLine("export { ServiceError, fromAxios, fromFetch } from './utils.js';")
+                appendLine("export type { RawResponse } from './utils.js';")
                 if ("axios" in clients) {
-                    appendLine("export { createAxiosClient } from './axios-client';")
+                    appendLine("export { createAxiosClient } from './axios-client.js';")
                 }
                 if ("fetch" in clients) {
-                    appendLine("export { createFetchClient } from './fetch-client';")
+                    appendLine("export { createFetchClient } from './fetch-client.js';")
                 }
             }
 

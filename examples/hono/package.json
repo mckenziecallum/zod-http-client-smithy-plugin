@@ -4,10 +4,12 @@
   "packageManager": "pnpm@10.13.1",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "tsx src/smoke-test.ts"
+    "test": "tsx src/smoke-test.ts",
+    "test:full-stack": "tsx src/full-stack-test.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.6",
+    "axios": "^1.13.2",
     "hono": "^4.10.7",
     "zod": "^4.1.13"
   },

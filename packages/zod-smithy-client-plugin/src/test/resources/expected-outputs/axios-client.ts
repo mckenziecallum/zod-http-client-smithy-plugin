@@ -1,14 +1,14 @@
 import type { AxiosInstance, AxiosError } from 'axios';
 import { z } from 'zod';
-import { fromAxios } from './utils';
-import { parseServiceError } from './errors';
-import { CreateItemInput } from './CreateItemInput';
-import { CreateItemOutput } from './CreateItemOutput';
-import { GetItemInput } from './GetItemInput';
-import { GetItemOutput } from './GetItemOutput';
-import { GetItemStatusInput } from './GetItemStatusInput';
-import { SearchItemsInput } from './SearchItemsInput';
-import { GetVersionInput } from './GetVersionInput';
+import { fromAxios } from './utils.js';
+import { parseServiceError } from './errors.js';
+import { CreateItemInput } from './CreateItemInput.js';
+import { CreateItemOutput } from './CreateItemOutput.js';
+import { GetItemInput } from './GetItemInput.js';
+import { GetItemOutput } from './GetItemOutput.js';
+import { GetItemStatusInput } from './GetItemStatusInput.js';
+import { SearchItemsInput } from './SearchItemsInput.js';
+import { GetVersionInput } from './GetVersionInput.js';
 
 export function createAxiosClient(instance: AxiosInstance) {
   return {

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ServiceError } from './utils';
+import { ServiceError } from './utils.js';
 
 export const BadRequestExceptionSchema = z.object({
   message: z.string().optional()

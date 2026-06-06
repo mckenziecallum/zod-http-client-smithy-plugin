@@ -143,7 +143,7 @@ class ZodHttpClientSmithyPluginIntegrationTest {
         val client = manifest.getFileString("axios-client.ts").get()
 
         assertThat(client)
-            .contains("import { parseServiceError } from './errors';")
+            .contains("import { parseServiceError } from './errors.js';")
             .contains("try {")
             .contains("parseServiceError('CreateItem', e.response.status, e.response.data)")
     }
@@ -154,7 +154,7 @@ class ZodHttpClientSmithyPluginIntegrationTest {
         val client = manifest.getFileString("fetch-client.ts").get()
 
         assertThat(client)
-            .contains("import { parseServiceError } from './errors';")
+            .contains("import { parseServiceError } from './errors.js';")
             .contains("if (!response.ok)")
             .contains("parseServiceError('CreateItem', response.status, errorBody)")
     }
