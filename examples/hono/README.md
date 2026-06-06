@@ -9,7 +9,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.cjmckenzie:zod-smithy-hono-plugin:1.0.0")
+    implementation("com.cjmckenzie:zod-smithy-hono-plugin:1.0.1")
 }
 ```
 
