@@ -155,6 +155,10 @@ class ZodHttpClientSmithyPluginIntegrationTest {
 
         assertThat(client)
             .contains("import { parseServiceError } from './errors.js';")
+            .contains("const method: string = req.method;")
+            .contains("method,")
+            .contains("...(method !== 'GET' && method !== 'HEAD' && Object.keys(req.body).length > 0")
+            .doesNotContain("...(req.method !== 'GET' && req.method !== 'HEAD'")
             .contains("if (!response.ok)")
             .contains("parseServiceError('CreateItem', response.status, errorBody)")
     }

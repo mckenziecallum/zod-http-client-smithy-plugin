@@ -3,7 +3,7 @@ namespace com.example.test
 
 service TestService {
     version: "1.0"
-    operations: [CreateItem, GetItem, GetItemStatus, SearchItems, GetVersion]
+    operations: [CreateItem, CompleteItem, GetItem, GetItemStatus, SearchItems, GetVersion]
 }
 
 @error("client")
@@ -79,6 +79,15 @@ operation CreateItem {
     }
 
     errors: [BadRequestException, NotFoundException, InternalServiceException]
+}
+
+@http(method: "POST", uri: "/items/{itemId}/complete", code: 200)
+operation CompleteItem {
+    input := {
+        @required
+        @httpLabel
+        itemId: String
+    }
 }
 
 @http(method: "GET", uri: "/items/{itemId}")

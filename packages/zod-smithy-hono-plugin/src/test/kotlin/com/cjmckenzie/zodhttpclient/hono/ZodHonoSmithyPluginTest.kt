@@ -26,12 +26,31 @@ class ZodHonoSmithyPluginTest {
             .contains("import { Hono } from 'hono';")
             .contains("export type HonoHandlers = {")
             .contains("createItem(input: z.output<typeof CreateItemInput>, c: Context)")
+            .contains("completeItem(input: z.output<typeof CompleteItemInput>, c: Context)")
             .contains("z.output<typeof CreateItemOutput> | Promise<z.output<typeof CreateItemOutput>>")
             .contains("app.post('/items/:itemType/:itemId', async (c) => {")
+            .contains("app.post('/items/:itemId/complete', async (c) => {")
             .contains("app.get('/items/:itemId', async (c) => {")
             .contains("CreateItemInput.parse(await readInput(c")
+            .contains("CompleteItemInput.parse(await readInput(c")
             .contains("CreateItemOutput.parse({ body: output, headers: {} })")
             .contains("return c.json(errorBody(error, 'NotFoundException'), 404 as const);")
+    }
+
+    @Test
+    fun `should generate empty body post parsing and validation error responses`() {
+        val router = executePlugin().getFileString("hono-router.ts").get()
+
+        assertThat(router)
+            .contains("let body = {};")
+            .contains("const expectsBody = c.req.method !== 'GET' && c.req.method !== 'HEAD';")
+            .contains("body = rawBody.length > 0 ? JSON.parse(rawBody) : {};")
+            .contains("message: 'Request body must be valid JSON.'")
+            .contains("if (error instanceof z.ZodError)")
+            .contains("message: 'Request body failed validation.'")
+            .contains("issues: error.issues.map(formatZodIssue)")
+            .contains("path: issue.path.length > 0 ? issue.path.join('.') : 'body'")
+            .contains("if (kind === 'ValidationError')")
     }
 
     @Test
@@ -41,6 +60,7 @@ class ZodHonoSmithyPluginTest {
         assertThat(index)
             .contains("export { createHonoRouter } from './hono-router.js';")
             .contains("export type { HonoHandlers } from './hono-router.js';")
+            .contains("export { CompleteItemInput } from './CompleteItemInput.js';")
             .contains("export { GetItemInput } from './GetItemInput.js';")
     }
 
