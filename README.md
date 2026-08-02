@@ -13,8 +13,8 @@ Shared Smithy analysis and schema generation lives in `com.cjmckenzie:zod-smithy
 
 ```kotlin
 dependencies {
-    implementation("com.cjmckenzie:zod-smithy-client-plugin:1.0.1")
-    implementation("com.cjmckenzie:zod-smithy-hono-plugin:1.0.1")
+    implementation("com.cjmckenzie:zod-smithy-client-plugin:1.0.3")
+    implementation("com.cjmckenzie:zod-smithy-hono-plugin:1.0.3")
 }
 ```
 
@@ -39,7 +39,7 @@ For local testing:
 ./gradlew publishToMavenLocal
 ```
 
-Local builds default to version `1.0.0-SNAPSHOT`. CI publishes `1.0.0-ci.<run_number>.<run_attempt>` from `main`, and release tags like `v1.0.1` publish stable version `1.0.1`.
+Local builds default to version `1.0.0-SNAPSHOT`. CI publishes `1.0.0-ci.<run_number>.<run_attempt>` from `main`, and release tags like `v1.0.3` publish stable version `1.0.3`.
 
 ## Client Plugin
 

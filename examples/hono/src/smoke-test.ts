@@ -8,6 +8,16 @@ const handlers: HonoHandlers = {
       name: 'Example item',
     };
   },
+  async upload(input) {
+    return {
+      matchId: input.path.matchId,
+      requestId: input.requestId,
+      tenantId: input.tenantId,
+      traceId: input.traceId,
+      source: input.query.source,
+      events: input.body.events,
+    };
+  },
 };
 
 const app = createHonoRouter(handlers);

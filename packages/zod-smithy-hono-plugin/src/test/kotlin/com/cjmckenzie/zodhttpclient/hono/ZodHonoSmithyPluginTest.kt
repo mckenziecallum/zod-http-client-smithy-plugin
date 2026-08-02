@@ -33,6 +33,9 @@ class ZodHonoSmithyPluginTest {
             .contains("app.get('/items/:itemId', async (c) => {")
             .contains("CreateItemInput.parse(await readInput(c")
             .contains("CompleteItemInput.parse(await readInput(c")
+            .contains("{ memberName: 'requestId', headerName: 'X-Request-ID' }")
+            .contains("{ memberName: 'retryCount', headerName: 'X-Retry-Count' }")
+            .contains(".map(({ memberName, headerName }) => [memberName, c.req.header(headerName)])")
             .contains("CreateItemOutput.parse({ body: output, headers: {} })")
             .contains("return c.json(errorBody(error, 'NotFoundException'), 404 as const);")
     }

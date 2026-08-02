@@ -40,10 +40,11 @@ class HonoFileGenerator {
                 appendLine("  const app = new Hono();")
                 appendLine()
                 operations.forEach { operation ->
+                    val headerBindings = operation.headerBindingsLiteral()
                     appendLine("  app.${operation.httpMethod.lowercase()}('${operation.uri.toHonoPath()}', async (c) => {")
                     appendLine("    try {")
                     appendLine(
-                        "      const input = ${operation.operationName}Input.parse(await readInput(c, ${operation.headerNamesLiteral()}));",
+                        "      const input = ${operation.operationName}Input.parse(await readInput(c, $headerBindings));",
                     )
                     appendLine("      const output = await handlers.${operation.methodName}(input, c);")
                     if (operation.outputSchema != null) {
@@ -61,7 +62,10 @@ class HonoFileGenerator {
                 appendLine("  return app;")
                 appendLine("}")
                 appendLine()
-                appendLine("async function readInput(c: Context, headerNames: readonly string[]) {")
+                appendLine("async function readInput(")
+                appendLine("  c: Context,")
+                appendLine("  headerBindings: readonly { memberName: string; headerName: string }[],")
+                appendLine(") {")
                 appendLine("  let body = {};")
                 appendLine("  const expectsBody = c.req.method !== 'GET' && c.req.method !== 'HEAD';")
                 appendLine()
@@ -80,7 +84,9 @@ class HonoFileGenerator {
                 appendLine("  }")
                 appendLine()
                 appendLine("  const headers = Object.fromEntries(")
-                appendLine("    headerNames.map((name) => [name, c.req.header(name)]).filter(([, value]) => value !== undefined),")
+                appendLine("    headerBindings")
+                appendLine("      .map(({ memberName, headerName }) => [memberName, c.req.header(headerName)])")
+                appendLine("      .filter(([, value]) => value !== undefined),")
                 appendLine("  );")
                 appendLine("  return {")
                 appendLine("    ...c.req.param(),")
@@ -158,9 +164,13 @@ class HonoFileGenerator {
         logger.info("Generated index.ts for Hono server")
     }
 
-    private fun OperationDescriptor.headerNamesLiteral(): String {
-        val headers = inputBindings.headerParameters.keys.joinToString(", ") { "'$it'" }
-        return "[$headers] as const"
+    private fun OperationDescriptor.headerBindingsLiteral(): String {
+        val bindings =
+            inputBindings.headerParameters.entries.joinToString(", ") { (headerName, parameterInfo) ->
+                val memberName = parameterInfo.member?.memberName ?: headerName
+                "{ memberName: '$memberName', headerName: '$headerName' }"
+            }
+        return "[$bindings] as const"
     }
 
     private fun String.toHonoPath(): String =
