@@ -129,6 +129,8 @@ serve({
 
 The generated router owns HTTP routing, request parsing, Zod input validation, output validation, and modeled Smithy error status mapping.
 
+Throw a modeled error using `_kind` (or `name`) matching the Smithy error shape and include its required members. The router validates the error and serializes modeled fields, stripping unmodeled properties, including those in nested structures. It preserves `_kind` and, for `aws.protocols#restJson1` services, adds the `__type` discriminator for Smithy client interoperability. Invalid modeled errors return a generic 500 response; request validation errors retain their existing 400 responses.
+
 ## Examples
 
 Unexpected handler exceptions return HTTP 500 with a fixed `InternalServerError` message and kind. Each response includes a generated `X-Correlation-ID` header. Configure `onUnexpectedError` to log the original exception alongside its ID and Hono request context:
@@ -150,7 +152,7 @@ The Hono example is executable and verifies both server-only and full-stack beha
 ./gradlew :hono-example:fullStackTest
 ```
 
-`fullStackTest` generates the Hono server and fetch client from the same Smithy model, starts a real Hono HTTP server, calls it through the generated fetch client, and validates the response end to end.
+`fullStackTest` generates the Hono server and fetch client from the same Smithy model, starts a real Hono HTTP server, calls it through the generated fetch client, and validates the response end to end. `:hono-example:test` also generates a Smithy Kotlin 1.7.4 client and verifies that it decodes a modeled error and its custom members from the Hono server. Both run as part of `:hono-example:check`.
 
 Example projects:
 

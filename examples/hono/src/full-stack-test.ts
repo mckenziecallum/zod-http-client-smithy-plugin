@@ -1,37 +1,21 @@
 import { serve } from "@hono/node-server";
 import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
-import { createFetchClient } from "../build/generated/client/index.js";
-import {
-  createHonoRouter,
-  type HonoHandlers,
-} from "../build/generated/hono/index.js";
+import { createFetchClient, MissingSequence } from "../build/generated/client/index.js";
+import { createHonoRouter } from "../build/generated/hono/index.js";
+import { handlers } from "./full-stack-handlers.js";
 
 const sensitiveError = new Error("Upstream request failed; internal-sensitive-diagnostic");
 let loggedError: unknown;
 let loggedCorrelationId: string | undefined;
 
-const handlers: HonoHandlers = {
-  async getItem(input) {
+const app = createHonoRouter({
+  ...handlers,
+  getItem(input, context) {
     if (input.path.itemId === "unexpected-error") throw sensitiveError;
-    return {
-      itemId: input.path.itemId,
-      name: `Item ${input.path.itemId}`,
-    };
+    return handlers.getItem(input, context);
   },
-  async upload(input) {
-    return {
-      matchId: input.path.matchId,
-      requestId: input.requestId,
-      tenantId: input.tenantId,
-      traceId: input.traceId,
-      source: input.source,
-      events: input.body.events,
-    };
-  },
-};
-
-const app = createHonoRouter(handlers, {
+}, {
   onUnexpectedError(error, { correlationId }) {
     loggedError = error;
     loggedCorrelationId = correlationId;
@@ -50,6 +34,57 @@ try {
 
   const address = server.address() as AddressInfo;
   const client = createFetchClient(`http://127.0.0.1:${address.port}`);
+  const errorResponse = await fetch(`http://127.0.0.1:${address.port}/items/missing-sequence`);
+  assert.equal(errorResponse.status, 409);
+  assert.deepEqual(await errorResponse.json(), {
+    _kind: "MissingSequence",
+    __type: "MissingSequence",
+    message: "Expected event 1 but received 3",
+    expectedSequence: 1,
+    receivedSequence: 3,
+    details: { reason: "out of order" },
+  });
+  await assert.rejects(client.getItem({ itemId: "missing-sequence" }), (error: unknown) => {
+    assert.ok(error instanceof MissingSequence);
+    assert.equal(error.expectedSequence, 1);
+    assert.equal(error.receivedSequence, 3);
+    assert.deepEqual(error.details, { reason: "out of order" });
+    return true;
+  });
+  const internalResponse = await fetch(`http://127.0.0.1:${address.port}/items/internal-error`);
+  assert.equal(internalResponse.status, 500);
+  assert.deepEqual(await internalResponse.json(), {
+    message: "InternalServerError",
+    _kind: "InternalServerError",
+  });
+
+  const namedResponse = await fetch(`http://127.0.0.1:${address.port}/items/named-error`);
+  assert.equal(namedResponse.status, 409);
+  assert.deepEqual(await namedResponse.json(), {
+    message: "Sequence mismatch",
+    expectedSequence: 0,
+    receivedSequence: 3,
+    _kind: "MissingSequence",
+    __type: "MissingSequence",
+  });
+  const invalidErrorResponse = await fetch(`http://127.0.0.1:${address.port}/items/invalid-modeled-error`);
+  assert.equal(invalidErrorResponse.status, 500);
+  assert.deepEqual(await invalidErrorResponse.json(), {
+    message: "InternalServerError",
+    _kind: "InternalServerError",
+  });
+
+  const malformedResponse = await fetch(`http://127.0.0.1:${address.port}/matches/invalid/events`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{",
+  });
+  assert.equal(malformedResponse.status, 400);
+  assert.deepEqual(await malformedResponse.json(), {
+    message: "Request body must be valid JSON.",
+    issues: [{ path: "body", message: "Could not parse JSON request body." }],
+  });
+
   const item = await client.getItem({ itemId: "full-stack" });
 
   assert.deepEqual(item, {
@@ -122,14 +157,14 @@ try {
     ],
   });
 
-  const internalResponse = await fetch(`http://127.0.0.1:${address.port}/items/unexpected-error`);
-  assert.equal(internalResponse.status, 500);
-  const internalBody = await internalResponse.text();
+  const unexpectedResponse = await fetch(`http://127.0.0.1:${address.port}/items/unexpected-error`);
+  assert.equal(unexpectedResponse.status, 500);
+  const internalBody = await unexpectedResponse.text();
   assert.ok(!internalBody.includes("internal-sensitive-diagnostic"), internalBody);
   assert.deepEqual(JSON.parse(internalBody), { message: "InternalServerError", _kind: "InternalServerError" });
   assert.equal(loggedError, sensitiveError);
   assert.match(loggedCorrelationId!, /^[0-9a-f-]{36}$/);
-  assert.equal(internalResponse.headers.get("X-Correlation-ID"), loggedCorrelationId);
+  assert.equal(unexpectedResponse.headers.get("X-Correlation-ID"), loggedCorrelationId);
 } finally {
   await new Promise<void>((resolve, reject) => {
     server.close((error) => {
