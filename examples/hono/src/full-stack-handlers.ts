@@ -37,7 +37,7 @@ export const handlers: HonoHandlers = {
       requestId: input.requestId,
       tenantId: input.tenantId,
       traceId: input.traceId,
-      source: input.query.source,
+      source: input.source,
       events: input.body.events,
     };
   },

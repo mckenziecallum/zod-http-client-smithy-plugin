@@ -27,7 +27,7 @@ operation Upload {
         @httpHeader("X-Trace-ID")
         traceId: String
 
-        @httpQuery("source")
+        @httpQuery("source-channel")
         source: String
 
         @required
@@ -59,7 +59,7 @@ list EventList {
 
 @http(method: "GET", uri: "/items/{itemId}", code: 200)
 operation GetItem {
-    errors: [MissingSequence]
+    errors: [MissingSequence, ItemNotFound]
     input := {
         @required
         @httpLabel
@@ -89,4 +89,11 @@ structure MissingSequence {
 
 structure ErrorDetails {
     reason: String
+}
+
+@error("client")
+@httpError(404)
+structure ItemNotFound {
+    @required
+    message: String
 }

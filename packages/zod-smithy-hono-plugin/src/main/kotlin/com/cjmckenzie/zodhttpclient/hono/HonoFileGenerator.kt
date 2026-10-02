@@ -3,6 +3,7 @@ package com.cjmckenzie.zodhttpclient.hono
 import com.cjmckenzie.zodhttpclient.models.OperationDescriptor
 import com.cjmckenzie.zodhttpclient.types.ZodType
 import software.amazon.smithy.build.FileManifest
+import software.amazon.smithy.model.traits.HttpQueryTrait
 import java.util.logging.Logger
 
 class HonoFileGenerator {
@@ -42,15 +43,24 @@ class HonoFileGenerator {
                 }
                 appendLine("};")
                 appendLine()
-                appendLine("export function createHonoRouter(handlers: HonoHandlers): Hono {")
+                appendLine("export type UnexpectedErrorContext = {")
+                appendLine("  correlationId: string;")
+                appendLine("  context: Context;")
+                appendLine("};")
+                appendLine()
+                appendLine("export type HonoRouterOptions = {")
+                appendLine("  onUnexpectedError?: (error: unknown, details: UnexpectedErrorContext) => void | Promise<void>;")
+                appendLine("};")
+                appendLine()
+                appendLine("export function createHonoRouter(handlers: HonoHandlers, options: HonoRouterOptions = {}): Hono {")
                 appendLine("  const app = new Hono();")
                 appendLine()
                 operations.forEach { operation ->
-                    val headerBindings = operation.headerBindingsLiteral()
+                    val inputBindings = operation.inputBindingsLiteral()
                     appendLine("  app.${operation.httpMethod.lowercase()}('${operation.uri.toHonoPath()}', async (c) => {")
                     appendLine("    try {")
                     appendLine(
-                        "      const input = ${operation.operationName}Input.parse(await readInput(c, $headerBindings));",
+                        "      const input = parseRequestInput(${operation.operationName}Input, await readInput(c, $inputBindings));",
                     )
                     appendLine("      const output = await handlers.${operation.methodName}(input, c);")
                     if (operation.outputSchema != null) {
@@ -60,7 +70,7 @@ class HonoFileGenerator {
                         appendLine("      return c.body(null, ${operation.successStatusCode} as const);")
                     }
                     appendLine("    } catch (error) {")
-                    appendLine("      return toErrorResponse(c, error);")
+                    appendLine("      return toErrorResponse(c, error, options);")
                     appendLine("    }")
                     appendLine("  });")
                     appendLine()
@@ -70,9 +80,14 @@ class HonoFileGenerator {
                 appendLine()
                 appendLine("async function readInput(")
                 appendLine("  c: Context,")
-                appendLine("  headerBindings: readonly { memberName: string; headerName: string }[],")
+                appendLine("  bindings: {")
+                appendLine("    path: readonly string[];")
+                appendLine("    query: readonly { memberName: string; queryName: string }[];")
+                appendLine("    headers: readonly { memberName: string; headerName: string }[];")
+                appendLine("    body: readonly string[];")
+                appendLine("  },")
                 appendLine(") {")
-                appendLine("  let body = {};")
+                appendLine("  let body: unknown = {};")
                 appendLine("  const expectsBody = c.req.method !== 'GET' && c.req.method !== 'HEAD';")
                 appendLine()
                 appendLine("  if (expectsBody) {")
@@ -81,41 +96,58 @@ class HonoFileGenerator {
                 appendLine("    try {")
                 appendLine("      body = rawBody.length > 0 ? JSON.parse(rawBody) : {};")
                 appendLine("    } catch {")
-                appendLine("      throw {")
-                appendLine("        name: 'ValidationError',")
-                appendLine("        message: 'Request body must be valid JSON.',")
-                appendLine("        issues: [{ path: 'body', message: 'Could not parse JSON request body.' }],")
-                appendLine("      };")
+                appendLine("      throw new RequestValidationError(")
+                appendLine("        'Request body must be valid JSON.',")
+                appendLine("        [{ path: 'body', message: 'Could not parse JSON request body.' }],")
+                appendLine("      );")
                 appendLine("    }")
                 appendLine("  }")
                 appendLine()
-                appendLine("  const headers = Object.fromEntries(")
-                appendLine("    headerBindings")
-                appendLine("      .map(({ memberName, headerName }) => [memberName, c.req.header(headerName)])")
-                appendLine("      .filter(([, value]) => value !== undefined),")
-                appendLine("  );")
-                appendLine("  return {")
-                appendLine("    ...c.req.param(),")
-                appendLine("    ...c.req.query(),")
-                appendLine("    ...headers,")
-                appendLine("    ...(typeof body === 'object' && body !== null ? body : {}),")
-                appendLine("  };")
+                appendLine("  const input: Record<string, unknown> = {};")
+                appendLine("  for (const memberName of bindings.path) {")
+                appendLine("    input[memberName] = c.req.param(memberName);")
+                appendLine("  }")
+                appendLine("  for (const { memberName, queryName } of bindings.query) {")
+                appendLine("    input[memberName] = c.req.query(queryName);")
+                appendLine("  }")
+                appendLine("  for (const { memberName, headerName } of bindings.headers) {")
+                appendLine("    input[memberName] = c.req.header(headerName);")
+                appendLine("  }")
+                appendLine("  if (typeof body === 'object' && body !== null && !Array.isArray(body)) {")
+                appendLine("    for (const memberName of bindings.body) {")
+                appendLine("      if (Object.hasOwn(body, memberName)) {")
+                appendLine("        input[memberName] = (body as Record<string, unknown>)[memberName];")
+                appendLine("      }")
+                appendLine("    }")
+                appendLine("  }")
+                appendLine("  return input;")
                 appendLine("}")
                 appendLine()
-                appendLine("function toErrorResponse(c: Context, error: unknown): Response {")
-                appendLine("  if (error instanceof z.ZodError) {")
-                appendLine("    return c.json({")
-                appendLine("      message: 'Request body failed validation.',")
-                appendLine("      issues: error.issues.map(formatZodIssue),")
-                appendLine("    }, 400 as const);")
+                appendLine("class RequestValidationError {")
+                appendLine("  constructor(readonly message: string, readonly issues: { path: string; message: string }[]) {}")
+                appendLine("}")
+                appendLine()
+                appendLine("function parseRequestInput<S extends z.ZodType>(schema: S, input: unknown): z.output<S> {")
+                appendLine("  try {")
+                appendLine("    return schema.parse(input);")
+                appendLine("  } catch (error) {")
+                appendLine("    if (error instanceof z.ZodError) {")
+                appendLine("      throw new RequestValidationError('Request body failed validation.', error.issues.map(formatZodIssue));")
+                appendLine("    }")
+                appendLine("    throw error;")
+                appendLine("  }")
+                appendLine("}")
+                appendLine()
+                appendLine("async function toErrorResponse(c: Context, error: unknown, options: HonoRouterOptions): Promise<Response> {")
+                appendLine("  if (error instanceof RequestValidationError) {")
+                appendLine("    return c.json({ message: error.message, issues: error.issues }, 400 as const);")
                 appendLine("  }")
                 appendLine()
-                appendLine("  const kind = (error as any)?._kind ?? (error as any)?.name;")
-                appendLine("  if (kind === 'ValidationError') {")
-                appendLine("    return c.json({")
-                appendLine("      message: (error as any)?.message ?? 'Request body failed validation.',")
-                appendLine("      issues: (error as any)?.issues ?? [],")
-                appendLine("    }, 400 as const);")
+                appendLine("  let kind: unknown;")
+                appendLine("  try {")
+                appendLine("    kind = (error as any)?._kind ?? (error as any)?.name;")
+                appendLine("  } catch {")
+                appendLine("    // Unreadable exception properties are treated as an unexpected error.")
                 appendLine("  }")
                 uniqueErrors.forEach { error ->
                     appendLine("  if (kind === '${error.name}') {")
@@ -130,7 +162,14 @@ class HonoFileGenerator {
                     appendLine("    return c.json({ message: 'InternalServerError', _kind: 'InternalServerError' }, 500 as const);")
                     appendLine("  }")
                 }
-                appendLine("  return c.json(errorBody(error, 'InternalServerError'), 500 as const);")
+                appendLine("  const correlationId = crypto.randomUUID();")
+                appendLine("  c.header('X-Correlation-ID', correlationId);")
+                appendLine("  try {")
+                appendLine("    await options.onUnexpectedError?.(error, { correlationId, context: c });")
+                appendLine("  } catch {")
+                appendLine("    // A failing logging hook must not change the safe public response.")
+                appendLine("  }")
+                appendLine("  return c.json({ message: 'InternalServerError', _kind: 'InternalServerError' }, 500 as const);")
                 appendLine("}")
                 appendLine()
                 appendLine("function errorBody(error: unknown, fallback: string) {")
@@ -171,20 +210,27 @@ class HonoFileGenerator {
                     }
                 }
                 appendLine("export { createHonoRouter } from './hono-router.js';")
-                appendLine("export type { HonoHandlers } from './hono-router.js';")
+                appendLine("export type { HonoHandlers, HonoRouterOptions, UnexpectedErrorContext } from './hono-router.js';")
             }
 
         fileManifest.writeFile("index.ts", content)
         logger.info("Generated index.ts for Hono server")
     }
 
-    private fun OperationDescriptor.headerBindingsLiteral(): String {
-        val bindings =
+    private fun OperationDescriptor.inputBindingsLiteral(): String {
+        val pathMembers = inputBindings.pathParameters.keys.joinToString(", ") { "'$it'" }
+        val queryBindings =
+            inputBindings.queryParameters.entries.joinToString(", ") { (memberName, parameterInfo) ->
+                val queryName = parameterInfo.member?.getTrait(HttpQueryTrait::class.java)?.orElse(null)?.value ?: memberName
+                "{ memberName: '$memberName', queryName: '$queryName' }"
+            }
+        val headerBindings =
             inputBindings.headerParameters.entries.joinToString(", ") { (headerName, parameterInfo) ->
                 val memberName = parameterInfo.member?.memberName ?: headerName
                 "{ memberName: '$memberName', headerName: '$headerName' }"
             }
-        return "[$bindings] as const"
+        val bodyMembers = inputBindings.bodyParameters.keys.joinToString(", ") { "'$it'" }
+        return "{ path: [$pathMembers], query: [$queryBindings], headers: [$headerBindings], body: [$bodyMembers] } as const"
     }
 
     private fun String.toHonoPath(): String =

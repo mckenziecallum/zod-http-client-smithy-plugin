@@ -133,6 +133,18 @@ Throw a modeled error using `_kind` (or `name`) matching the Smithy error shape 
 
 ## Examples
 
+Unexpected handler exceptions return HTTP 500 with a fixed `InternalServerError` message and kind. Each response includes a generated `X-Correlation-ID` header. Configure `onUnexpectedError` to log the original exception alongside its ID and Hono request context:
+
+```ts
+const app = createHonoRouter(handlers, {
+  onUnexpectedError(error, { correlationId, context }) {
+    logger.error({ error, correlationId, path: context.req.path });
+  },
+});
+```
+
+The hook may be asynchronous; hook failures do not change the public response. Modeled public errors retain their configured HTTP status, and request validation still returns HTTP 400. Handler and output validation failures are treated as unexpected exceptions.
+
 The Hono example is executable and verifies both server-only and full-stack behavior.
 
 ```sh

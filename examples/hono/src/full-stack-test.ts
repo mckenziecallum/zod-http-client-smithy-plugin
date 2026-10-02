@@ -5,7 +5,22 @@ import { createFetchClient, MissingSequence } from "../build/generated/client/in
 import { createHonoRouter } from "../build/generated/hono/index.js";
 import { handlers } from "./full-stack-handlers.js";
 
-const app = createHonoRouter(handlers);
+const sensitiveError = new Error("Upstream request failed; internal-sensitive-diagnostic");
+let loggedError: unknown;
+let loggedCorrelationId: string | undefined;
+
+const app = createHonoRouter({
+  ...handlers,
+  getItem(input, context) {
+    if (input.path.itemId === "unexpected-error") throw sensitiveError;
+    return handlers.getItem(input, context);
+  },
+}, {
+  onUnexpectedError(error, { correlationId }) {
+    loggedError = error;
+    loggedCorrelationId = correlationId;
+  },
+});
 const server = serve({
   fetch: app.fetch,
   hostname: "127.0.0.1",
@@ -39,7 +54,7 @@ try {
   const internalResponse = await fetch(`http://127.0.0.1:${address.port}/items/internal-error`);
   assert.equal(internalResponse.status, 500);
   assert.deepEqual(await internalResponse.json(), {
-    message: "Internal failure",
+    message: "InternalServerError",
     _kind: "InternalServerError",
   });
 
@@ -96,7 +111,7 @@ try {
   });
 
   const rawResponse = await fetch(
-    `http://127.0.0.1:${address.port}/matches/match-raw/events?source=raw-http`,
+    `http://127.0.0.1:${address.port}/matches/match-raw/events?source-channel=raw-http`,
     {
       method: "POST",
       headers: {
@@ -141,6 +156,15 @@ try {
       },
     ],
   });
+
+  const unexpectedResponse = await fetch(`http://127.0.0.1:${address.port}/items/unexpected-error`);
+  assert.equal(unexpectedResponse.status, 500);
+  const internalBody = await unexpectedResponse.text();
+  assert.ok(!internalBody.includes("internal-sensitive-diagnostic"), internalBody);
+  assert.deepEqual(JSON.parse(internalBody), { message: "InternalServerError", _kind: "InternalServerError" });
+  assert.equal(loggedError, sensitiveError);
+  assert.match(loggedCorrelationId!, /^[0-9a-f-]{36}$/);
+  assert.equal(unexpectedResponse.headers.get("X-Correlation-ID"), loggedCorrelationId);
 } finally {
   await new Promise<void>((resolve, reject) => {
     server.close((error) => {
