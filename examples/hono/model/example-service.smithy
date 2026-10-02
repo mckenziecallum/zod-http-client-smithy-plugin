@@ -24,7 +24,7 @@ operation Upload {
         @httpHeader("X-Trace-ID")
         traceId: String
 
-        @httpQuery("source")
+        @httpQuery("source-channel")
         source: String
 
         @required

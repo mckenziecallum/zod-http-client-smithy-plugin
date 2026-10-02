@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.HttpErrorTrait
 import software.amazon.smithy.model.traits.HttpHeaderTrait
+import software.amazon.smithy.model.traits.HttpQueryTrait
 import software.amazon.smithy.model.traits.HttpTrait
 
 /**
@@ -47,7 +48,7 @@ class ZodSchemaGenerator(
 
         bindings.queryParameters.forEach { (name, paramInfo) ->
             allFields[name] = buildFieldType(model, paramInfo)
-            queryFieldMap[name] = name // query param name matches field name
+            queryFieldMap[name] = paramInfo.member?.getTrait(HttpQueryTrait::class.java)?.orElse(null)?.value ?: name
         }
 
         bindings.headerParameters.forEach { (headerName, paramInfo) ->
