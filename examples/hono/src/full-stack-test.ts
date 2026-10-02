@@ -1,30 +1,9 @@
 import { serve } from "@hono/node-server";
 import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
-import { createFetchClient } from "../build/generated/client/index.js";
-import {
-  createHonoRouter,
-  type HonoHandlers,
-} from "../build/generated/hono/index.js";
-
-const handlers: HonoHandlers = {
-  async getItem(input) {
-    return {
-      itemId: input.path.itemId,
-      name: `Item ${input.path.itemId}`,
-    };
-  },
-  async upload(input) {
-    return {
-      matchId: input.path.matchId,
-      requestId: input.requestId,
-      tenantId: input.tenantId,
-      traceId: input.traceId,
-      source: input.query.source,
-      events: input.body.events,
-    };
-  },
-};
+import { createFetchClient, MissingSequence } from "../build/generated/client/index.js";
+import { createHonoRouter } from "../build/generated/hono/index.js";
+import { handlers } from "./full-stack-handlers.js";
 
 const app = createHonoRouter(handlers);
 const server = serve({
@@ -40,6 +19,57 @@ try {
 
   const address = server.address() as AddressInfo;
   const client = createFetchClient(`http://127.0.0.1:${address.port}`);
+  const errorResponse = await fetch(`http://127.0.0.1:${address.port}/items/missing-sequence`);
+  assert.equal(errorResponse.status, 409);
+  assert.deepEqual(await errorResponse.json(), {
+    _kind: "MissingSequence",
+    __type: "MissingSequence",
+    message: "Expected event 1 but received 3",
+    expectedSequence: 1,
+    receivedSequence: 3,
+    details: { reason: "out of order" },
+  });
+  await assert.rejects(client.getItem({ itemId: "missing-sequence" }), (error: unknown) => {
+    assert.ok(error instanceof MissingSequence);
+    assert.equal(error.expectedSequence, 1);
+    assert.equal(error.receivedSequence, 3);
+    assert.deepEqual(error.details, { reason: "out of order" });
+    return true;
+  });
+  const internalResponse = await fetch(`http://127.0.0.1:${address.port}/items/internal-error`);
+  assert.equal(internalResponse.status, 500);
+  assert.deepEqual(await internalResponse.json(), {
+    message: "Internal failure",
+    _kind: "InternalServerError",
+  });
+
+  const namedResponse = await fetch(`http://127.0.0.1:${address.port}/items/named-error`);
+  assert.equal(namedResponse.status, 409);
+  assert.deepEqual(await namedResponse.json(), {
+    message: "Sequence mismatch",
+    expectedSequence: 0,
+    receivedSequence: 3,
+    _kind: "MissingSequence",
+    __type: "MissingSequence",
+  });
+  const invalidErrorResponse = await fetch(`http://127.0.0.1:${address.port}/items/invalid-modeled-error`);
+  assert.equal(invalidErrorResponse.status, 500);
+  assert.deepEqual(await invalidErrorResponse.json(), {
+    message: "InternalServerError",
+    _kind: "InternalServerError",
+  });
+
+  const malformedResponse = await fetch(`http://127.0.0.1:${address.port}/matches/invalid/events`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{",
+  });
+  assert.equal(malformedResponse.status, 400);
+  assert.deepEqual(await malformedResponse.json(), {
+    message: "Request body must be valid JSON.",
+    issues: [{ path: "body", message: "Could not parse JSON request body." }],
+  });
+
   const item = await client.getItem({ itemId: "full-stack" });
 
   assert.deepEqual(item, {

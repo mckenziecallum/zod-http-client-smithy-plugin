@@ -1,6 +1,9 @@
 $version: "2"
 namespace com.example.hono
 
+use aws.protocols#restJson1
+
+@restJson1
 service ExampleService {
     version: "1.0"
     operations: [GetItem, Upload]
@@ -56,6 +59,7 @@ list EventList {
 
 @http(method: "GET", uri: "/items/{itemId}", code: 200)
 operation GetItem {
+    errors: [MissingSequence]
     input := {
         @required
         @httpLabel
@@ -69,4 +73,20 @@ operation GetItem {
         @required
         name: String
     }
+}
+
+@error("client")
+@httpError(409)
+structure MissingSequence {
+    @required
+    message: String
+    @required
+    expectedSequence: Integer
+    @required
+    receivedSequence: Integer
+    details: ErrorDetails
+}
+
+structure ErrorDetails {
+    reason: String
 }

@@ -37,7 +37,8 @@ class ZodHonoSmithyPluginTest {
             .contains("{ memberName: 'retryCount', headerName: 'X-Retry-Count' }")
             .contains(".map(({ memberName, headerName }) => [memberName, c.req.header(headerName)])")
             .contains("CreateItemOutput.parse({ body: output, headers: {} })")
-            .contains("return c.json(errorBody(error, 'NotFoundException'), 404 as const);")
+            .contains("return c.json({ ...parsed.data, _kind: 'NotFoundException' }, 404 as const);")
+            .doesNotContain("__type")
     }
 
     @Test

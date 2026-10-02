@@ -1,6 +1,7 @@
 package com.cjmckenzie.zodhttpclient.hono
 
 import com.cjmckenzie.zodhttpclient.models.OperationDescriptor
+import com.cjmckenzie.zodhttpclient.types.ZodType
 import software.amazon.smithy.build.FileManifest
 import java.util.logging.Logger
 
@@ -10,6 +11,7 @@ class HonoFileGenerator {
     fun generateHonoRouterFile(
         fileManifest: FileManifest,
         operations: List<OperationDescriptor>,
+        restJsonErrors: Boolean = false,
     ) {
         val uniqueErrors = operations.flatMap { it.errors }.distinctBy { it.name }
         val content =
@@ -22,6 +24,10 @@ class HonoFileGenerator {
                     operation.outputSchema?.let {
                         appendLine("import { ${operation.operationName}Output } from './${operation.operationName}Output.js';")
                     }
+                }
+                appendLine()
+                uniqueErrors.forEach { error ->
+                    appendLine("const ${error.name}ErrorSchema = ${ZodType.Object(error.fields).render()};")
                 }
                 appendLine()
                 appendLine("export type HonoHandlers = {")
@@ -113,7 +119,15 @@ class HonoFileGenerator {
                 appendLine("  }")
                 uniqueErrors.forEach { error ->
                     appendLine("  if (kind === '${error.name}') {")
-                    appendLine("    return c.json(errorBody(error, '${error.name}'), ${error.httpStatusCode} as const);")
+                    appendLine("    const parsed = ${error.name}ErrorSchema.safeParse(error);")
+                    appendLine("    if (parsed.success) {")
+                    val discriminator = if (restJsonErrors) ", __type: '${error.name}'" else ""
+                    appendLine(
+                        "      return c.json({ ...parsed.data, _kind: '${error.name}'$discriminator }, " +
+                            "${error.httpStatusCode} as const);",
+                    )
+                    appendLine("    }")
+                    appendLine("    return c.json({ message: 'InternalServerError', _kind: 'InternalServerError' }, 500 as const);")
                     appendLine("  }")
                 }
                 appendLine("  return c.json(errorBody(error, 'InternalServerError'), 500 as const);")

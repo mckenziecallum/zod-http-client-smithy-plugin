@@ -1,5 +1,6 @@
 package com.cjmckenzie.examples.hono
 
+import aws.smithy.kotlin.codegen.KotlinCodegenPlugin
 import com.cjmckenzie.zodhttpclient.ZodHttpClientSmithyPlugin
 import com.cjmckenzie.zodhttpclient.hono.ZodHonoSmithyPlugin
 import software.amazon.smithy.build.FileManifest
@@ -11,7 +12,7 @@ import java.nio.file.Path
 import kotlin.io.path.createDirectories
 
 fun main(args: Array<String>) {
-    require(args.size == 3) { "Usage: GenerateHonoExample <model> <honoOutputDir> <clientOutputDir>" }
+    require(args.size == 4) { "Usage: GenerateHonoExample <model> <honoOutputDir> <clientOutputDir> <kotlinOutputDir>" }
 
     val modelPath = Path.of(args[0])
     val honoOutputDir = Path.of(args[1])
@@ -21,6 +22,7 @@ fun main(args: Array<String>) {
 
     val model =
         ModelAssembler()
+            .discoverModels()
             .addImport(modelPath)
             .assemble()
             .unwrap()
@@ -47,4 +49,18 @@ fun main(args: Array<String>) {
 
     ZodHonoSmithyPlugin().execute(honoContext)
     ZodHttpClientSmithyPlugin().execute(clientContext)
+    KotlinCodegenPlugin().execute(
+        PluginContext.builder()
+            .model(model)
+            .fileManifest(FileManifest.create(Path.of(args[3])))
+            .settings(
+                settings.withMember(
+                    "package",
+                    Node.objectNode()
+                        .withMember("name", "com.example.hono.client")
+                        .withMember("version", "0.0.1"),
+                ),
+            )
+            .build(),
+    )
 }

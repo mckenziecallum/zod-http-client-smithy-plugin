@@ -40,7 +40,11 @@ class ZodHonoSmithyPlugin : SmithyBuildPlugin {
                     }
                 }
 
-                fileGenerator.generateHonoRouterFile(fileManifest, descriptors)
+                fileGenerator.generateHonoRouterFile(
+                    fileManifest,
+                    descriptors,
+                    restJsonErrors = service.hasTrait("aws.protocols#restJson1"),
+                )
                 fileGenerator.generateIndexFile(fileManifest, descriptors)
             }
             logger.info("Hono server generation completed successfully")
