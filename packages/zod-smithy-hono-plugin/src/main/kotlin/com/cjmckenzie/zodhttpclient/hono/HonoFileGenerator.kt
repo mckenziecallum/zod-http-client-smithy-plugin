@@ -2,6 +2,7 @@ package com.cjmckenzie.zodhttpclient.hono
 
 import com.cjmckenzie.zodhttpclient.models.OperationDescriptor
 import software.amazon.smithy.build.FileManifest
+import software.amazon.smithy.model.traits.HttpQueryTrait
 import java.util.logging.Logger
 
 class HonoFileGenerator {
@@ -40,11 +41,11 @@ class HonoFileGenerator {
                 appendLine("  const app = new Hono();")
                 appendLine()
                 operations.forEach { operation ->
-                    val headerBindings = operation.headerBindingsLiteral()
+                    val inputBindings = operation.inputBindingsLiteral()
                     appendLine("  app.${operation.httpMethod.lowercase()}('${operation.uri.toHonoPath()}', async (c) => {")
                     appendLine("    try {")
                     appendLine(
-                        "      const input = ${operation.operationName}Input.parse(await readInput(c, $headerBindings));",
+                        "      const input = ${operation.operationName}Input.parse(await readInput(c, $inputBindings));",
                     )
                     appendLine("      const output = await handlers.${operation.methodName}(input, c);")
                     if (operation.outputSchema != null) {
@@ -64,9 +65,14 @@ class HonoFileGenerator {
                 appendLine()
                 appendLine("async function readInput(")
                 appendLine("  c: Context,")
-                appendLine("  headerBindings: readonly { memberName: string; headerName: string }[],")
+                appendLine("  bindings: {")
+                appendLine("    path: readonly string[];")
+                appendLine("    query: readonly { memberName: string; queryName: string }[];")
+                appendLine("    headers: readonly { memberName: string; headerName: string }[];")
+                appendLine("    body: readonly string[];")
+                appendLine("  },")
                 appendLine(") {")
-                appendLine("  let body = {};")
+                appendLine("  let body: unknown = {};")
                 appendLine("  const expectsBody = c.req.method !== 'GET' && c.req.method !== 'HEAD';")
                 appendLine()
                 appendLine("  if (expectsBody) {")
@@ -83,17 +89,24 @@ class HonoFileGenerator {
                 appendLine("    }")
                 appendLine("  }")
                 appendLine()
-                appendLine("  const headers = Object.fromEntries(")
-                appendLine("    headerBindings")
-                appendLine("      .map(({ memberName, headerName }) => [memberName, c.req.header(headerName)])")
-                appendLine("      .filter(([, value]) => value !== undefined),")
-                appendLine("  );")
-                appendLine("  return {")
-                appendLine("    ...c.req.param(),")
-                appendLine("    ...c.req.query(),")
-                appendLine("    ...headers,")
-                appendLine("    ...(typeof body === 'object' && body !== null ? body : {}),")
-                appendLine("  };")
+                appendLine("  const input: Record<string, unknown> = {};")
+                appendLine("  for (const memberName of bindings.path) {")
+                appendLine("    input[memberName] = c.req.param(memberName);")
+                appendLine("  }")
+                appendLine("  for (const { memberName, queryName } of bindings.query) {")
+                appendLine("    input[memberName] = c.req.query(queryName);")
+                appendLine("  }")
+                appendLine("  for (const { memberName, headerName } of bindings.headers) {")
+                appendLine("    input[memberName] = c.req.header(headerName);")
+                appendLine("  }")
+                appendLine("  if (typeof body === 'object' && body !== null && !Array.isArray(body)) {")
+                appendLine("    for (const memberName of bindings.body) {")
+                appendLine("      if (Object.hasOwn(body, memberName)) {")
+                appendLine("        input[memberName] = (body as Record<string, unknown>)[memberName];")
+                appendLine("      }")
+                appendLine("    }")
+                appendLine("  }")
+                appendLine("  return input;")
                 appendLine("}")
                 appendLine()
                 appendLine("function toErrorResponse(c: Context, error: unknown): Response {")
@@ -164,13 +177,20 @@ class HonoFileGenerator {
         logger.info("Generated index.ts for Hono server")
     }
 
-    private fun OperationDescriptor.headerBindingsLiteral(): String {
-        val bindings =
+    private fun OperationDescriptor.inputBindingsLiteral(): String {
+        val pathMembers = inputBindings.pathParameters.keys.joinToString(", ") { "'$it'" }
+        val queryBindings =
+            inputBindings.queryParameters.entries.joinToString(", ") { (memberName, parameterInfo) ->
+                val queryName = parameterInfo.member?.getTrait(HttpQueryTrait::class.java)?.orElse(null)?.value ?: memberName
+                "{ memberName: '$memberName', queryName: '$queryName' }"
+            }
+        val headerBindings =
             inputBindings.headerParameters.entries.joinToString(", ") { (headerName, parameterInfo) ->
                 val memberName = parameterInfo.member?.memberName ?: headerName
                 "{ memberName: '$memberName', headerName: '$headerName' }"
             }
-        return "[$bindings] as const"
+        val bodyMembers = inputBindings.bodyParameters.keys.joinToString(", ") { "'$it'" }
+        return "{ path: [$pathMembers], query: [$queryBindings], headers: [$headerBindings], body: [$bodyMembers] } as const"
     }
 
     private fun String.toHonoPath(): String =
