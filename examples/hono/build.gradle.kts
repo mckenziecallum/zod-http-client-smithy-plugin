@@ -28,6 +28,7 @@ tasks.register<JavaExec>("generateExample") {
         generatedHonoDir.get().asFile.absolutePath,
         generatedClientDir.get().asFile.absolutePath,
     )
+    inputs.file("model/example-service.smithy")
     outputs.dir(generatedHonoDir)
     outputs.dir(generatedClientDir)
 }
