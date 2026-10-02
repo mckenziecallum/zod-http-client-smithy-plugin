@@ -31,8 +31,8 @@ class ZodHonoSmithyPluginTest {
             .contains("app.post('/items/:itemType/:itemId', async (c) => {")
             .contains("app.post('/items/:itemId/complete', async (c) => {")
             .contains("app.get('/items/:itemId', async (c) => {")
-            .contains("CreateItemInput.parse(await readInput(c")
-            .contains("CompleteItemInput.parse(await readInput(c")
+            .contains("parseRequestInput(CreateItemInput, await readInput(c")
+            .contains("parseRequestInput(CompleteItemInput, await readInput(c")
             .contains("{ memberName: 'requestId', headerName: 'X-Request-ID' }")
             .contains("{ memberName: 'retryCount', headerName: 'X-Retry-Count' }")
             .contains("input[memberName] = c.req.header(headerName);")
@@ -48,12 +48,12 @@ class ZodHonoSmithyPluginTest {
             .contains("let body: unknown = {};")
             .contains("const expectsBody = c.req.method !== 'GET' && c.req.method !== 'HEAD';")
             .contains("body = rawBody.length > 0 ? JSON.parse(rawBody) : {};")
-            .contains("message: 'Request body must be valid JSON.'")
+            .contains("'Request body must be valid JSON.'")
             .contains("if (error instanceof z.ZodError)")
-            .contains("message: 'Request body failed validation.'")
-            .contains("issues: error.issues.map(formatZodIssue)")
+            .contains("'Request body failed validation.'")
+            .contains("error.issues.map(formatZodIssue)")
             .contains("path: issue.path.length > 0 ? issue.path.join('.') : 'body'")
-            .contains("if (kind === 'ValidationError')")
+            .contains("if (error instanceof RequestValidationError)")
     }
 
     @Test
@@ -62,7 +62,7 @@ class ZodHonoSmithyPluginTest {
 
         assertThat(index)
             .contains("export { createHonoRouter } from './hono-router.js';")
-            .contains("export type { HonoHandlers } from './hono-router.js';")
+            .contains("export type { HonoHandlers, HonoRouterOptions, UnexpectedErrorContext } from './hono-router.js';")
             .contains("export { CompleteItemInput } from './CompleteItemInput.js';")
             .contains("export { GetItemInput } from './GetItemInput.js';")
     }

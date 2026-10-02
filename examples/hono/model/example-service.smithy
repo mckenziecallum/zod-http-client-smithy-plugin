@@ -56,6 +56,8 @@ list EventList {
 
 @http(method: "GET", uri: "/items/{itemId}", code: 200)
 operation GetItem {
+    errors: [ItemNotFound]
+
     input := {
         @required
         @httpLabel
@@ -69,4 +71,11 @@ operation GetItem {
         @required
         name: String
     }
+}
+
+@error("client")
+@httpError(404)
+structure ItemNotFound {
+    @required
+    message: String
 }

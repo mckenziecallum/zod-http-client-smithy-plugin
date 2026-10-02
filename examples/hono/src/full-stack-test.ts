@@ -7,8 +7,13 @@ import {
   type HonoHandlers,
 } from "../build/generated/hono/index.js";
 
+const sensitiveError = new Error("Upstream request failed; internal-sensitive-diagnostic");
+let loggedError: unknown;
+let loggedCorrelationId: string | undefined;
+
 const handlers: HonoHandlers = {
   async getItem(input) {
+    if (input.path.itemId === "unexpected-error") throw sensitiveError;
     return {
       itemId: input.path.itemId,
       name: `Item ${input.path.itemId}`,
@@ -26,7 +31,12 @@ const handlers: HonoHandlers = {
   },
 };
 
-const app = createHonoRouter(handlers);
+const app = createHonoRouter(handlers, {
+  onUnexpectedError(error, { correlationId }) {
+    loggedError = error;
+    loggedCorrelationId = correlationId;
+  },
+});
 const server = serve({
   fetch: app.fetch,
   hostname: "127.0.0.1",
@@ -111,6 +121,15 @@ try {
       },
     ],
   });
+
+  const internalResponse = await fetch(`http://127.0.0.1:${address.port}/items/unexpected-error`);
+  assert.equal(internalResponse.status, 500);
+  const internalBody = await internalResponse.text();
+  assert.ok(!internalBody.includes("internal-sensitive-diagnostic"), internalBody);
+  assert.deepEqual(JSON.parse(internalBody), { message: "InternalServerError", _kind: "InternalServerError" });
+  assert.equal(loggedError, sensitiveError);
+  assert.match(loggedCorrelationId!, /^[0-9a-f-]{36}$/);
+  assert.equal(internalResponse.headers.get("X-Correlation-ID"), loggedCorrelationId);
 } finally {
   await new Promise<void>((resolve, reject) => {
     server.close((error) => {
