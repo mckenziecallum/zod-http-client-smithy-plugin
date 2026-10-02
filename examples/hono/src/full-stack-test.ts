@@ -25,7 +25,7 @@ const handlers: HonoHandlers = {
       requestId: input.requestId,
       tenantId: input.tenantId,
       traceId: input.traceId,
-      source: input.query.source,
+      source: input.source,
       events: input.body.events,
     };
   },
@@ -76,7 +76,7 @@ try {
   });
 
   const rawResponse = await fetch(
-    `http://127.0.0.1:${address.port}/matches/match-raw/events?source=raw-http`,
+    `http://127.0.0.1:${address.port}/matches/match-raw/events?source-channel=raw-http`,
     {
       method: "POST",
       headers: {

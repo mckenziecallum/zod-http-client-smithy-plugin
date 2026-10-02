@@ -35,7 +35,7 @@ class ZodHonoSmithyPluginTest {
             .contains("parseRequestInput(CompleteItemInput, await readInput(c")
             .contains("{ memberName: 'requestId', headerName: 'X-Request-ID' }")
             .contains("{ memberName: 'retryCount', headerName: 'X-Retry-Count' }")
-            .contains(".map(({ memberName, headerName }) => [memberName, c.req.header(headerName)])")
+            .contains("input[memberName] = c.req.header(headerName);")
             .contains("CreateItemOutput.parse({ body: output, headers: {} })")
             .contains("return c.json(errorBody(error, 'NotFoundException'), 404 as const);")
     }
@@ -45,7 +45,7 @@ class ZodHonoSmithyPluginTest {
         val router = executePlugin().getFileString("hono-router.ts").get()
 
         assertThat(router)
-            .contains("let body = {};")
+            .contains("let body: unknown = {};")
             .contains("const expectsBody = c.req.method !== 'GET' && c.req.method !== 'HEAD';")
             .contains("body = rawBody.length > 0 ? JSON.parse(rawBody) : {};")
             .contains("'Request body must be valid JSON.'")
