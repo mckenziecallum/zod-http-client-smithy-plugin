@@ -1,8 +1,10 @@
 package com.cjmckenzie.zodhttpclient.hono
 
 import com.cjmckenzie.zodhttpclient.models.OperationDescriptor
+import com.cjmckenzie.zodhttpclient.models.ParameterInfo
 import com.cjmckenzie.zodhttpclient.types.ZodType
 import software.amazon.smithy.build.FileManifest
+import software.amazon.smithy.model.shapes.ShapeType
 import software.amazon.smithy.model.traits.HttpQueryTrait
 import java.util.logging.Logger
 
@@ -101,12 +103,30 @@ class HonoFileGenerator {
                 appendLine("  return app;")
                 appendLine("}")
                 appendLine()
+                appendLine("type WireType = 'string' | 'integer' | 'number' | 'boolean';")
+                appendLine()
+                appendLine("// Decode only HTTP bindings; native schemas retain constraints, defaults, and requiredness.")
+                appendLine("function decodeScalar(value: string | undefined, type: WireType): unknown {")
+                appendLine("  if (value === undefined || type === 'string') return value;")
+                appendLine("  if (type === 'boolean') {")
+                appendLine("    if (value === 'true') return true;")
+                appendLine("    if (value === 'false') return false;")
+                appendLine("    return value;")
+                appendLine("  }")
+                appendLine("  const pattern = type === 'integer'")
+                appendLine("    ? /^-?[0-9]+$/")
+                appendLine("    : /^-?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?$/;")
+                appendLine("  if (!pattern.test(value) || value.trim() !== value) return value;")
+                appendLine("  const decoded = Number(value);")
+                appendLine("  return Number.isFinite(decoded) ? decoded : value;")
+                appendLine("}")
+                appendLine()
                 appendLine("async function readInput(")
                 appendLine("  c: Context,")
                 appendLine("  bindings: {")
                 appendLine("    path: readonly string[];")
-                appendLine("    query: readonly { memberName: string; queryName: string }[];")
-                appendLine("    headers: readonly { memberName: string; headerName: string }[];")
+                appendLine("    query: readonly { memberName: string; queryName: string; type: WireType }[];")
+                appendLine("    headers: readonly { memberName: string; headerName: string; type: WireType }[];")
                 appendLine("    body: readonly string[];")
                 appendLine("  },")
                 appendLine(") {")
@@ -130,11 +150,11 @@ class HonoFileGenerator {
                 appendLine("  for (const memberName of bindings.path) {")
                 appendLine("    input[memberName] = c.req.param(memberName);")
                 appendLine("  }")
-                appendLine("  for (const { memberName, queryName } of bindings.query) {")
-                appendLine("    input[memberName] = c.req.query(queryName);")
+                appendLine("  for (const { memberName, queryName, type } of bindings.query) {")
+                appendLine("    input[memberName] = decodeScalar(c.req.query(queryName), type);")
                 appendLine("  }")
-                appendLine("  for (const { memberName, headerName } of bindings.headers) {")
-                appendLine("    input[memberName] = c.req.header(headerName);")
+                appendLine("  for (const { memberName, headerName, type } of bindings.headers) {")
+                appendLine("    input[memberName] = decodeScalar(c.req.header(headerName), type);")
                 appendLine("  }")
                 appendLine("  if (typeof body === 'object' && body !== null && !Array.isArray(body)) {")
                 appendLine("    for (const memberName of bindings.body) {")
@@ -245,16 +265,24 @@ class HonoFileGenerator {
         val queryBindings =
             inputBindings.queryParameters.entries.joinToString(", ") { (memberName, parameterInfo) ->
                 val queryName = parameterInfo.member?.getTrait(HttpQueryTrait::class.java)?.orElse(null)?.value ?: memberName
-                "{ memberName: '$memberName', queryName: '$queryName' }"
+                "{ memberName: '$memberName', queryName: '$queryName', type: '${parameterInfo.wireType()}' }"
             }
         val headerBindings =
             inputBindings.headerParameters.entries.joinToString(", ") { (headerName, parameterInfo) ->
                 val memberName = parameterInfo.member?.memberName ?: headerName
-                "{ memberName: '$memberName', headerName: '$headerName' }"
+                "{ memberName: '$memberName', headerName: '$headerName', type: '${parameterInfo.wireType()}' }"
             }
         val bodyMembers = inputBindings.bodyParameters.keys.joinToString(", ") { "'$it'" }
         return "{ path: [$pathMembers], query: [$queryBindings], headers: [$headerBindings], body: [$bodyMembers] } as const"
     }
+
+    private fun ParameterInfo.wireType(): String =
+        when (shape.type) {
+            ShapeType.BYTE, ShapeType.SHORT, ShapeType.INTEGER, ShapeType.LONG -> "integer"
+            ShapeType.FLOAT, ShapeType.DOUBLE -> "number"
+            ShapeType.BOOLEAN -> "boolean"
+            else -> "string"
+        }
 
     private fun String.toHonoPath(): String =
         replace(Regex("\\{([^}]+)}")) { match ->
