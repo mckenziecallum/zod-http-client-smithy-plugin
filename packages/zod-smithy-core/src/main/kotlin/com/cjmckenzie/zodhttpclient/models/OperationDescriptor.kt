@@ -14,4 +14,6 @@ data class OperationDescriptor(
     val outputBindings: HttpBindingAnalysis?,
     val errors: List<ErrorShapeInfo>,
     val outputResultSchema: TypeScriptSchema? = null,
-)
+) {
+    val isRedirect: Boolean get() = successStatusCode in 300..399
+}

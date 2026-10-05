@@ -1,6 +1,16 @@
 import type { HonoHandlers } from "../build/generated/hono/index.js";
 
 export const handlers: HonoHandlers = {
+  async getContent(input) {
+    if (input.accessToken !== "allowed") {
+      throw { _kind: "ItemNotFound", message: "Content is not accessible." };
+    }
+    if (input.path.contentId === "invalid-output") return { location: "" };
+    return {
+      location: `/downloads/${encodeURIComponent(input.path.contentId)}?token=example-short-lived-token`,
+      cacheControl: "no-store",
+    };
+  },
   async createGeneration(input) {
     return {
       id: input.id,

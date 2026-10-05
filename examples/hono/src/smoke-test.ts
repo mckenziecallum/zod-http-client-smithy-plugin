@@ -6,6 +6,7 @@ import { handlers as fullStackHandlers } from './full-stack-handlers.js';
 import { createHonoRouter, type HonoHandlers } from '../build/generated/hono/index.js';
 
 const handlers: HonoHandlers = {
+  getContent: fullStackHandlers.getContent,
   createGeneration: fullStackHandlers.createGeneration,
   async inspectBindings(input) {
     return {

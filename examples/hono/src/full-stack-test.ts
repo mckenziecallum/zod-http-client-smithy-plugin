@@ -3,8 +3,8 @@ import { z } from "zod";
 import { serve } from "@hono/node-server";
 import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
-import { createAxiosClient, createFetchClient, CreateGenerationOutput, fromAxios, fromFetch, InspectBindingsInput, MissingSequence } from "../build/generated/client/index.js";
-import { createHonoRouter } from "../build/generated/hono/index.js";
+import { createAxiosClient, createFetchClient, CreateGenerationOutput, GetContentInput, fromAxios, fromFetch, InspectBindingsInput, MissingSequence } from "../build/generated/client/index.js";
+import { createHonoRouter, type HonoHandlers } from "../build/generated/hono/index.js";
 import { handlers } from "./full-stack-handlers.js";
 
 const sensitiveError = new Error("Upstream request failed; internal-sensitive-diagnostic");
@@ -23,6 +23,8 @@ const app = createHonoRouter({
     loggedCorrelationId = correlationId;
   },
 });
+const svg = '<svg xmlns="http://www.w3.org/2000/svg"><text>content</text></svg>';
+app.get('/downloads/:contentId', (c) => c.body(svg, 200, { 'Content-Type': 'image/svg+xml' }));
 const server = serve({
   async fetch(request) {
     // Exercise client validation against a peer that omits a required wire header.
@@ -45,6 +47,47 @@ try {
 
   const address = server.address() as AddressInfo;
   const baseUrl = `http://127.0.0.1:${address.port}`;
+  const client = createFetchClient(baseUrl);
+  assert.ok(!('getContent' in client));
+  // @ts-expect-error The redirect handler must return the modeled Location member.
+  const missingLocationHandler: HonoHandlers['getContent'] = () => ({});
+  const invalidOutputApp = createHonoRouter({ ...handlers, getContent: missingLocationHandler });
+  const missingLocation = await invalidOutputApp.request('/content/example', {
+    headers: { 'X-Content-Access': 'allowed' },
+  });
+  assert.equal(missingLocation.status, 500);
+  assert.equal(missingLocation.headers.get('location'), null);
+  // This compile-time check ensures content cannot accidentally enter the JSON client.
+  if (false) {
+    // @ts-expect-error Redirect endpoints have no generated JSON client method.
+    await client.getContent({ contentId: 'example', accessToken: 'allowed' });
+  }
+  const request = GetContentInput.parse({ contentId: 'example', accessToken: 'allowed' });
+  const contentUrl = new URL(request.url, baseUrl);
+  // Node's manual redirect mode exposes headers; browsers return opaqueredirect instead.
+  const redirect = await fetch(contentUrl, { headers: request.headers, redirect: 'manual' });
+  assert.equal(redirect.status, 303);
+  assert.equal(redirect.headers.get('location'), '/downloads/example?token=example-short-lived-token');
+  assert.equal(redirect.headers.get('cache-control'), 'no-store');
+  assert.ok(!redirect.headers.get('content-type')?.includes('application/json'));
+  assert.equal(await redirect.text(), '');
+  const content = await fetch(contentUrl, { headers: request.headers, redirect: 'follow' });
+  assert.equal(content.status, 200);
+  assert.equal(content.redirected, true);
+  assert.equal(content.headers.get('content-type'), 'image/svg+xml');
+  assert.equal(await content.text(), svg);
+  const unauthenticated = await fetch(contentUrl, { redirect: 'manual' });
+  assert.equal(unauthenticated.status, 400);
+  assert.equal(unauthenticated.headers.get('location'), null);
+  const denied = await fetch(contentUrl, { headers: { 'X-Content-Access': 'denied' }, redirect: 'manual' });
+  assert.equal(denied.status, 404);
+  assert.equal(denied.headers.get('location'), null);
+  const invalidRedirect = await fetch(new URL('/content/invalid-output', baseUrl), {
+    headers: request.headers, redirect: 'manual',
+  });
+  assert.equal(invalidRedirect.status, 500);
+  assert.equal(invalidRedirect.headers.get('location'), null);
+
   const generationResponse = await fetch(`${baseUrl}/generations`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -55,7 +98,6 @@ try {
   assert.equal(generationResponse.headers.get("X-Trace-ID"), null);
   assert.deepEqual(await generationResponse.json(), { id: "gen_123" });
 
-  const client = createFetchClient(`http://127.0.0.1:${address.port}`);
   const axiosClient = createAxiosClient(axios.create({ baseURL: baseUrl }));
   for (const api of [client, axiosClient]) {
     assert.deepEqual(await api.createGeneration({ id: "gen_123" }), {

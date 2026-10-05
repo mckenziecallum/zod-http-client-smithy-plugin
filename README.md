@@ -146,6 +146,77 @@ The response has status 202, JSON body `{ "id": "gen_123" }`, and `Location: /ge
 
 Throw a modeled error using `_kind` (or `name`) matching the Smithy error shape and include its required members. The router validates the error and serializes modeled fields, stripping unmodeled properties, including those in nested structures. It preserves `_kind` and, for `aws.protocols#restJson1` services, adds the `__type` discriminator for Smithy client interoperability. Invalid modeled errors return a generic 500 response; request validation errors retain their existing 400 responses.
 
+## Redirects and content downloads
+
+Model a bodyless redirect with `@http(code: 301 | 302 | 303 | 307 | 308)` and an output containing only `@httpHeader` members. A required string `Location` header is mandatory. Smithy normally expects success codes in the 2xx range; suppress `HttpResponseCodeSemantics` on this operation to opt into this plugin's redirect contract:
+
+```smithy
+@suppress(["HttpResponseCodeSemantics"])
+@readonly
+@http(method: "GET", uri: "/content/{contentId}", code: 303)
+operation GetContent {
+    input := {
+        @required
+        @httpLabel
+        contentId: String
+    }
+    output := {
+        @required
+        @httpHeader("Location")
+        location: ContentLocation
+
+        @httpHeader("Cache-Control")
+        cacheControl: String
+    }
+}
+
+@length(min: 1)
+string ContentLocation
+```
+
+Return the modeled output from a typed Hono handler after checking access:
+
+```ts
+const handlers: HonoHandlers = {
+  async getContent(input, c) {
+    await checkAccess(c, input.path.contentId);
+    return {
+      location: await createShortLivedContentUrl(input.path.contentId),
+      cacheControl: 'no-store',
+    };
+  },
+};
+```
+
+The router validates the output, emits modeled headers, and returns the modeled redirect status with an empty body. Invalid output returns a generic 500. Ordinary JSON operations still validate their output; modeled response-header members are emitted as headers and excluded from the JSON body. Handlers return modeled data; returning a native `Response` is not a supported escape hatch. For custom SVG, ZIP, streaming, or other non-JSON responses, register a separate Hono route outside the generated router. The redirect target may be such a route or an external content store. Access checks, target URL policy, and URL expiry belong to the application.
+
+Both generated clients omit methods for modeled redirect operations, while still exporting their input and output schemas. This also applies to services containing only redirects. Build the endpoint URL with its input schema:
+
+```ts
+const request = GetContentInput.parse({ contentId: 'abc-123' });
+const url = new URL(request.url, 'https://api.example.com');
+Object.entries(request.query).forEach(([key, value]) => {
+  if (value !== undefined) url.searchParams.set(key, String(value));
+});
+
+// For a GET endpoint authenticated by cookies, navigate to download/view content:
+window.location.assign(url.href);
+
+// Or fetch the final content, using the endpoint's authentication requirements:
+const response = await fetch(url, {
+  method: request.method,
+  headers: request.headers,
+  credentials: 'include',
+  redirect: 'follow',
+});
+if (!response.ok) throw new Error(`Content request failed: ${response.status}`);
+const content = await response.blob();
+```
+
+Navigation cannot attach arbitrary authentication headers. Browser fetch must satisfy CORS and credential policies at the API and final content origin. Browser `redirect: 'manual'` yields an `opaqueredirect` response with status 0 and no readable headers/body, including `Location`; exposing `Location` through CORS does not bypass this filtering. Node's manual fetch can expose redirect headers, but that behavior must not be assumed in browsers. See the [Fetch Standard](https://fetch.spec.whatwg.org/#concept-filtered-response-opaque-redirect).
+
+Generated methods for ordinary operations remain JSON clients: fetch follows redirects by default unless request options override it, and modeled outputs are parsed as JSON and validated. Do not model a content redirect as a 200 JSON operation. Redirect bodies, missing/optional/non-string `Location`, and other 3xx success codes fail at generation time. `@httpPayload` is unsupported for inputs and outputs and fails at generation time; raw/binary content and dynamic response modes are not supported by generated JSON routes or client methods. No response mode is inferred from a string/blob shape or a `Content-Type` header.
+
 ## Examples
 
 Unexpected handler exceptions return HTTP 500 with a fixed `InternalServerError` message and kind. Each response includes a generated `X-Correlation-ID` header. Configure `onUnexpectedError` to log the original exception alongside its ID and Hono request context:

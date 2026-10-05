@@ -38,6 +38,7 @@ class ZodHonoSmithyPluginTest {
             .contains("{ memberName: 'retryCount', headerName: 'X-Retry-Count', type: 'integer' }")
             .contains("input[memberName] = decodeScalar(c.req.header(headerName), type);")
             .contains("CreateItemResult.parse(output)")
+            .contains("c.header('X-Request-ID', String(result.requestId))")
             .contains("return c.json({ ...parsed.data, _kind: 'NotFoundException' }, 404 as const);")
             .doesNotContain("__type")
     }

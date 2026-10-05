@@ -74,7 +74,11 @@ class HonoFileGenerator {
                             val memberName = parameterInfo.member?.memberName ?: headerName
                             appendLine("      if (result.$memberName !== undefined) c.header('$headerName', String(result.$memberName));")
                         }
-                        appendLine("      return c.json(body, ${operation.successStatusCode} as const);")
+                        if (operation.isRedirect) {
+                            appendLine("      return c.body(null, ${operation.successStatusCode} as const);")
+                        } else {
+                            appendLine("      return c.json(body, ${operation.successStatusCode} as const);")
+                        }
                     } else {
                         appendLine("      return c.body(null, ${operation.successStatusCode} as const);")
                     }

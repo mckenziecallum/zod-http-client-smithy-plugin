@@ -39,3 +39,5 @@ That task generates the Hono router and fetch/axios clients from `model/example-
 ```sh
 ./gradlew :hono-example:fullStackTest
 ```
+
+The example also models `GetContent` as a bodyless 303 with required `Location` and optional `Cache-Control` headers. Its illustrative access check uses `X-Content-Access`; production applications should use their own authentication middleware. `GetContentInput` builds the request, while `getContent` is omitted from the generated JSON client. The full-stack test checks denied access, invalid redirect output, and following the redirect to SVG bytes served by a separate Hono route. Its manual redirect assertions run in Node; browsers do not expose `Location` in manual mode. See the [redirect/content contract](../../README.md#redirects-and-content-downloads).

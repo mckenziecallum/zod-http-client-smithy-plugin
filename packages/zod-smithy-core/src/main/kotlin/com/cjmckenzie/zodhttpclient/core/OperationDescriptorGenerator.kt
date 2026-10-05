@@ -8,6 +8,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.HttpHeaderTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import java.util.logging.Logger
 
@@ -43,6 +44,24 @@ class OperationDescriptorGenerator(
                 .flatMap(model::getShape)
                 .orElse(null) as? StructureShape
 
+        val statusCode = httpTrait?.code ?: 200
+        if (statusCode in 300..399) {
+            require(statusCode in setOf(301, 302, 303, 307, 308)) {
+                "${operation.id}: unsupported redirect status $statusCode; use 301, 302, 303, 307, or 308."
+            }
+            val members = outputShape?.allMembers?.values.orEmpty()
+            require(members.isNotEmpty() && members.all { it.hasTrait(HttpHeaderTrait::class.java) }) {
+                "${operation.id}: redirect outputs must contain only @httpHeader members (no JSON body or payload)."
+            }
+            val location =
+                members.find {
+                    it.getTrait(HttpHeaderTrait::class.java).get().value.equals("Location", ignoreCase = true)
+                }
+            require(location != null && location.isRequired && model.expectShape(location.target).isStringShape) {
+                "${operation.id}: redirect outputs require a required string @httpHeader(\"Location\") member."
+            }
+        }
+
         val inputBindings =
             inputShape?.let { httpBindingAnalyzer.analyzeHttpBindings(model, it) }
                 ?: emptyHttpBindings()
@@ -56,7 +75,7 @@ class OperationDescriptorGenerator(
             methodName = operation.id.name.replaceFirstChar { it.lowercase() },
             httpMethod = httpTrait?.method ?: "GET",
             uri = httpTrait?.uri?.toString() ?: "/",
-            successStatusCode = httpTrait?.code ?: 200,
+            successStatusCode = statusCode,
             inputSchema = inputSchema,
             outputSchema = outputSchema,
             outputResultSchema = outputShape?.let { schemaGenerator.generateOutputResultSchema(model, operation, it) },
