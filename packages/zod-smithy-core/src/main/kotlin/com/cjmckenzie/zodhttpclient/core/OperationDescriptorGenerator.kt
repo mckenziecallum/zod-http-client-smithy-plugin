@@ -78,6 +78,7 @@ class OperationDescriptorGenerator(
             successStatusCode = statusCode,
             inputSchema = inputSchema,
             outputSchema = outputSchema,
+            outputResultSchema = outputShape?.let { schemaGenerator.generateOutputResultSchema(model, operation, it) },
             inputBindings = inputBindings,
             outputBindings = outputBindings,
             errors = errors,

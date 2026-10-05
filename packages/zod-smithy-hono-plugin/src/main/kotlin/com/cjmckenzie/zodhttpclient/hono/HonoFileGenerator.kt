@@ -25,7 +25,7 @@ class HonoFileGenerator {
                 operations.forEach { operation ->
                     appendLine("import { ${operation.operationName}Input } from './${operation.operationName}Input.js';")
                     operation.outputSchema?.let {
-                        appendLine("import { ${operation.operationName}Output } from './${operation.operationName}Output.js';")
+                        appendLine("import { ${operation.operationName}Result } from './${operation.operationName}Result.js';")
                     }
                 }
                 appendLine()
@@ -36,13 +36,8 @@ class HonoFileGenerator {
                 appendLine("export type HonoHandlers = {")
                 operations.forEach { operation ->
                     val outputType =
-                        operation.outputSchema?.let {
-                            val schemaType = "z.output<typeof ${operation.operationName}Output>"
-                            val requiredHeaders =
-                                operation.outputBindings?.headerParameters.orEmpty().values
-                                    .filter { it.isRequired }.joinToString(" | ") { "'${it.member!!.memberName}'" }
-                            if (requiredHeaders.isEmpty()) schemaType else "$schemaType & Required<Pick<$schemaType, $requiredHeaders>>"
-                        } ?: "unknown"
+                        operation.outputSchema?.let { "z.output<typeof ${operation.operationName}Result>" }
+                            ?: "unknown"
                     appendLine(
                         "  ${operation.methodName}(input: z.output<typeof ${operation.operationName}Input>, c: Context): " +
                             "$outputType | Promise<$outputType>;",
@@ -71,23 +66,16 @@ class HonoFileGenerator {
                     )
                     appendLine("      const output = await handlers.${operation.methodName}(input, c);")
                     if (operation.outputSchema != null) {
-                        val headers = operation.outputBindings?.headerParameters.orEmpty()
-                        val headerEntries =
-                            headers.entries.joinToString(", ") { (headerName, parameter) ->
-                                "'$headerName': output.${parameter.member!!.memberName}"
-                            }
-                        val headerLiteral = if (headers.isEmpty()) "{}" else "{ $headerEntries }"
-                        appendLine("      const body = ${operation.operationName}Output.parse({ body: output, headers: $headerLiteral });")
-                        headers.forEach { (headerName, parameter) ->
-                            val memberName = parameter.member!!.memberName
-                            appendLine("      if (body.$memberName !== undefined) c.header('$headerName', String(body.$memberName));")
+                        appendLine("      const result = ${operation.operationName}Result.parse(output);")
+                        val bindings = requireNotNull(operation.outputBindings)
+                        val bodyEntries = bindings.bodyParameters.keys.joinToString(", ") { "$it: result.$it" }
+                        appendLine("      const body = { $bodyEntries };")
+                        bindings.headerParameters.forEach { (headerName, parameterInfo) ->
+                            val memberName = parameterInfo.member?.memberName ?: headerName
+                            appendLine("      if (result.$memberName !== undefined) c.header('$headerName', String(result.$memberName));")
                         }
                         if (operation.isRedirect) {
                             appendLine("      return c.body(null, ${operation.successStatusCode} as const);")
-                        } else if (headers.isNotEmpty()) {
-                            val headerMembers = headers.values.joinToString(", ") { it.member!!.memberName }
-                            appendLine("      const { $headerMembers, ...jsonBody } = body;")
-                            appendLine("      return c.json(jsonBody, ${operation.successStatusCode} as const);")
                         } else {
                             appendLine("      return c.json(body, ${operation.successStatusCode} as const);")
                         }
@@ -244,6 +232,13 @@ class HonoFileGenerator {
                         "export type { ${operation.operationName}Input as ${operation.operationName}InputType } " +
                             "from './${operation.operationName}Input.js';",
                     )
+                    operation.outputResultSchema?.let {
+                        appendLine("export { ${operation.operationName}Result } from './${operation.operationName}Result.js';")
+                        appendLine(
+                            "export type { ${operation.operationName}Result as ${operation.operationName}ResultType } " +
+                                "from './${operation.operationName}Result.js';",
+                        )
+                    }
                     operation.outputSchema?.let {
                         appendLine("export { ${operation.operationName}Output } from './${operation.operationName}Output.js';")
                         appendLine(

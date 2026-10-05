@@ -20,6 +20,7 @@ class ZodHonoSmithyPluginTest {
         assertThat(manifest.hasFile("hono-router.ts")).isTrue()
         assertThat(manifest.hasFile("CreateItemInput.ts")).isTrue()
         assertThat(manifest.hasFile("CreateItemOutput.ts")).isTrue()
+        assertThat(manifest.hasFile("CreateItemResult.ts")).isTrue()
 
         val router = manifest.getFileString("hono-router.ts").get()
         assertThat(router)
@@ -27,7 +28,7 @@ class ZodHonoSmithyPluginTest {
             .contains("export type HonoHandlers = {")
             .contains("createItem(input: z.output<typeof CreateItemInput>, c: Context)")
             .contains("completeItem(input: z.output<typeof CompleteItemInput>, c: Context)")
-            .contains("z.output<typeof CreateItemOutput> | Promise<z.output<typeof CreateItemOutput>>")
+            .contains("z.output<typeof CreateItemResult> | Promise<z.output<typeof CreateItemResult>>")
             .contains("app.post('/items/:itemType/:itemId', async (c) => {")
             .contains("app.post('/items/:itemId/complete', async (c) => {")
             .contains("app.get('/items/:itemId', async (c) => {")
@@ -36,9 +37,8 @@ class ZodHonoSmithyPluginTest {
             .contains("{ memberName: 'requestId', headerName: 'X-Request-ID', type: 'string' }")
             .contains("{ memberName: 'retryCount', headerName: 'X-Retry-Count', type: 'integer' }")
             .contains("input[memberName] = decodeScalar(c.req.header(headerName), type);")
-            .contains("CreateItemOutput.parse({ body: output, headers: { 'X-Request-ID': output.requestId } })")
-            .contains("c.header('X-Request-ID', String(body.requestId))")
-            .contains("const { requestId, ...jsonBody } = body;")
+            .contains("CreateItemResult.parse(output)")
+            .contains("c.header('X-Request-ID', String(result.requestId))")
             .contains("return c.json({ ...parsed.data, _kind: 'NotFoundException' }, 404 as const);")
             .doesNotContain("__type")
     }
@@ -68,6 +68,8 @@ class ZodHonoSmithyPluginTest {
             .contains("export type { HonoHandlers, HonoRouterOptions, UnexpectedErrorContext } from './hono-router.js';")
             .contains("export { CompleteItemInput } from './CompleteItemInput.js';")
             .contains("export { GetItemInput } from './GetItemInput.js';")
+            .contains("export { CreateItemResult } from './CreateItemResult.js';")
+            .contains("export type { CreateItemResult as CreateItemResultType } from './CreateItemResult.js';")
     }
 
     private fun executePlugin(): MockManifest {

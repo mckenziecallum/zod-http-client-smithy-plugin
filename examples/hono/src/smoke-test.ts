@@ -7,6 +7,7 @@ import { createHonoRouter, type HonoHandlers } from '../build/generated/hono/ind
 
 const handlers: HonoHandlers = {
   getContent: fullStackHandlers.getContent,
+  createGeneration: fullStackHandlers.createGeneration,
   async inspectBindings(input) {
     return {
       limit: input.limit,
@@ -170,7 +171,7 @@ for (const { description, name } of [
     assert.equal(response.status, 500);
     assert.deepEqual(await response.json(), { message: 'InternalServerError', _kind: 'InternalServerError' });
     assert.ok(loggedError instanceof z.ZodError);
-    assert.deepEqual(loggedError.issues.map(issue => issue.path), [['body', 'name']]);
+    assert.deepEqual(loggedError.issues.map(issue => issue.path), [['name']]);
     assert.equal(loggedPath, '/items/example-item');
     assert.match(loggedCorrelationId!, /^[0-9a-f-]{36}$/);
     assert.equal(response.headers.get('X-Correlation-ID'), loggedCorrelationId);

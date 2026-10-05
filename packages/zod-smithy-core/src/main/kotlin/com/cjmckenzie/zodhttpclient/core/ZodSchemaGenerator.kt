@@ -86,12 +86,9 @@ class ZodSchemaGenerator(
         val bodyFields = linkedMapOf<String, ZodType>()
         val headerFields = linkedMapOf<String, Pair<String, ZodType>>() // fieldName -> (headerName, zodType)
 
+        val fieldTypes = outputFieldTypes(model, outputShape)
         outputShape.allMembers.forEach { (memberName, member) ->
-            val targetShape = model.getShape(member.target).orElse(null) ?: return@forEach
-            val baseType = typeMapper.mapShapeToZodType(model, targetShape)
-            val constrainedType = constraintMapper.applyFieldLevelConstraints(baseType, member, targetShape)
-
-            val fieldType = if (member.isRequired) constrainedType else constrainedType.optional()
+            val fieldType = fieldTypes.getValue(memberName)
 
             if (member.hasTrait(HttpHeaderTrait::class.java)) {
                 val headerName = member.getTrait(HttpHeaderTrait::class.java).get().value
@@ -107,6 +104,28 @@ class ZodSchemaGenerator(
             headerFields = headerFields,
         )
     }
+
+    fun generateOutputResultSchema(
+        model: Model,
+        operation: OperationShape,
+        outputShape: StructureShape,
+    ): TypeScriptSchema =
+        TypeScriptSchema(
+            name = "${operation.id.name}Result",
+            imports = setOf("import { z } from 'zod';"),
+            schema = ZodType.Object(outputFieldTypes(model, outputShape)),
+        )
+
+    private fun outputFieldTypes(
+        model: Model,
+        outputShape: StructureShape,
+    ): Map<String, ZodType> =
+        outputShape.allMembers.mapValues { (_, member) ->
+            val targetShape = model.expectShape(member.target)
+            val baseType = typeMapper.mapShapeToZodType(model, targetShape)
+            val constrainedType = constraintMapper.applyFieldLevelConstraints(baseType, member, targetShape)
+            if (member.isRequired) constrainedType else constrainedType.optional()
+        }
 
     private fun buildFieldType(
         model: Model,
