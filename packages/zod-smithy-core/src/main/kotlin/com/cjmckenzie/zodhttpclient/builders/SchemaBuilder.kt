@@ -105,9 +105,11 @@ class SchemaBuilder {
             val headerZodFields =
                 headerFields.map { (_, pair) ->
                     val (headerName, zodType) = pair
-                    headerName to zodType
+                    headerName.lowercase() to zodType
                 }.toMap()
-            rawFields["headers"] = ZodTypes.obj(headerZodFields).optional()
+            val headerSchema = ZodTypes.obj(headerZodFields)
+            rawFields["headers"] =
+                if (headerFields.values.any { (_, type) -> type !is ZodType.Optional }) headerSchema else headerSchema.optional()
         }
 
         rawFields["statusCode"] = ZodTypes.number().optional()
@@ -124,9 +126,15 @@ class SchemaBuilder {
 
         // Map header names back to field names
         headerFields.forEach { (fieldName, pair) ->
-            val (headerName, _) = pair
-            val quotedHeader = if (headerName.needsQuoting()) "?.['$headerName']" else "?.$headerName"
-            transformLines.add("  ...(v.headers$quotedHeader !== undefined && { $fieldName: v.headers$quotedHeader }),")
+            val (headerName, type) = pair
+            val normalizedHeader = headerName.lowercase()
+            val access = if (normalizedHeader.needsQuoting()) "['$normalizedHeader']" else ".$normalizedHeader"
+            if (type is ZodType.Optional) {
+                val optionalAccess = if (normalizedHeader.needsQuoting()) "v.headers?.$access" else "v.headers?$access"
+                transformLines.add("  ...($optionalAccess !== undefined && { $fieldName: $optionalAccess }),")
+            } else {
+                transformLines.add("  $fieldName: v.headers$access,")
+            }
         }
 
         // Include statusCode

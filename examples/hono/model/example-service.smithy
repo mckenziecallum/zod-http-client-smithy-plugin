@@ -6,7 +6,7 @@ use aws.protocols#restJson1
 @restJson1
 service ExampleService {
     version: "1.0"
-    operations: [GetItem, Upload]
+    operations: [GetItem, Upload, CreateGeneration]
 }
 
 @http(method: "POST", uri: "/matches/{matchId}/events", code: 200)
@@ -96,4 +96,23 @@ structure ErrorDetails {
 structure ItemNotFound {
     @required
     message: String
+}
+
+@http(method: "POST", uri: "/generations", code: 202)
+operation CreateGeneration {
+    input := {
+        @required
+        id: String
+    }
+    output := {
+        @required
+        id: String
+
+        @required
+        @httpHeader("Location")
+        location: String
+
+        @httpHeader("X-Trace-ID")
+        traceId: String
+    }
 }

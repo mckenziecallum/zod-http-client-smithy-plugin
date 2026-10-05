@@ -6,17 +6,21 @@ export interface RawResponse {
   statusCode: number;
 }
 
+function normalizeHeaders(headers: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value]));
+}
+
 export function fromAxios(response: AxiosResponse): RawResponse {
   return {
     body: response.data,
-    headers: response.headers as Record<string, string>,
+    headers: normalizeHeaders(response.headers as Record<string, string>),
     statusCode: response.status,
   };
 }
 
 export async function fromFetch(response: Response): Promise<RawResponse> {
   const headers: Record<string, string> = {};
-  response.headers.forEach((value, key) => { headers[key] = value; });
+  response.headers.forEach((value, key) => { headers[key.toLowerCase()] = value; });
   return {
     body: await response.json(),
     headers,

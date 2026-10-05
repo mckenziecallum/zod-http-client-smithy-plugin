@@ -26,13 +26,15 @@ dependencies {
 
 Generated code exposes `createHonoRouter` and a `HonoHandlers` type. Your app supplies the handlers; generated code owns routing, request parsing, Zod validation, response validation, and Smithy error status mapping.
 
+Handlers return flat modeled members, including header-bound members: `createGeneration` returns `{ id, location, traceId? }`. The router validates the generated `CreateGenerationResult` schema and sends `location` as the `Location` header, `traceId` as `X-Trace-ID`, and only `id` in the JSON body.
+
 ## Verify
 
 ```sh
 ./gradlew :hono-example:check
 ```
 
-That task generates the Hono router and fetch client from `model/example-service.smithy`, installs the TypeScript dependencies with pnpm, typechecks the generated code, runs a smoke test against the generated Hono app, and runs a full-stack test that calls the Hono server through the generated client.
+That task generates the Hono router and fetch/axios clients from `model/example-service.smithy`, installs the TypeScript dependencies with pnpm, typechecks the generated code, runs a smoke test against the generated Hono app, and runs a full-stack test that calls the Hono server through both generated clients. The 202 `CreateGeneration` operation verifies required `Location` and optional `X-Trace-ID` response headers, body/header separation, mixed header casing, and rejection of missing required headers.
 
 ```sh
 ./gradlew :hono-example:fullStackTest

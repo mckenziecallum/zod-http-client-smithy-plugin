@@ -102,6 +102,7 @@ Generated files:
 ```text
 {Operation}Input.ts
 {Operation}Output.ts
+{Operation}Result.ts
 hono-router.ts
 index.ts
 ```
@@ -128,6 +129,20 @@ serve({
 ```
 
 The generated router owns HTTP routing, request parsing, Zod input validation, output validation, and modeled Smithy error status mapping.
+
+Handlers return a flat object using Smithy member names, including members bound with `@httpHeader`. Each operation with output exports a `{Operation}Result` schema and `{Operation}ResultType` for this handler API. The router validates that result, emits body members as JSON, and emits header members under their declared HTTP names. Required header members must be present; optional headers are omitted when undefined. A missing or invalid required output member produces HTTP 500.
+
+For an operation with `@http(code: 202)` and a required `@httpHeader("Location") location: String` output member:
+
+```ts
+const handlers: HonoHandlers = {
+  async createGeneration(input) {
+    return { id: input.id, location: `/generations/${input.id}` };
+  },
+};
+```
+
+The response has status 202, JSON body `{ "id": "gen_123" }`, and `Location: /generations/gen_123`. Generated fetch and axios clients expose `{ id, location, statusCode }` and decode response header names case-insensitively. `{Operation}OutputType` describes that decoded client response, including its optional `statusCode`; `{Operation}ResultType` describes the handler's modeled result.
 
 Throw a modeled error using `_kind` (or `name`) matching the Smithy error shape and include its required members. The router validates the error and serializes modeled fields, stripping unmodeled properties, including those in nested structures. It preserves `_kind` and, for `aws.protocols#restJson1` services, adds the `__type` discriminator for Smithy client interoperability. Invalid modeled errors return a generic 500 response; request validation errors retain their existing 400 responses.
 

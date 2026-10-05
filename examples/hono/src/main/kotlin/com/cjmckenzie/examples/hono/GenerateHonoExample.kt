@@ -39,7 +39,7 @@ fun main(args: Array<String>) {
             .build()
     val clientSettings =
         settings
-            .withMember("client", ArrayNode.fromStrings(listOf("fetch")))
+            .withMember("client", ArrayNode.fromStrings(listOf("fetch", "axios")))
     val clientContext =
         PluginContext.builder()
             .model(model)

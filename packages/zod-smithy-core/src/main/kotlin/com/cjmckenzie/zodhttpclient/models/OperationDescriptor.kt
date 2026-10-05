@@ -13,4 +13,5 @@ data class OperationDescriptor(
     val inputBindings: HttpBindingAnalysis,
     val outputBindings: HttpBindingAnalysis?,
     val errors: List<ErrorShapeInfo>,
+    val outputResultSchema: TypeScriptSchema? = null,
 )
