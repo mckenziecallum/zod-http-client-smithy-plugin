@@ -3,7 +3,7 @@ import { z } from "zod";
 import { serve } from "@hono/node-server";
 import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
-import { createAxiosClient, createFetchClient, CreateGenerationOutput, fromAxios, fromFetch, MissingSequence } from "../build/generated/client/index.js";
+import { createAxiosClient, createFetchClient, CreateGenerationOutput, fromAxios, fromFetch, InspectBindingsInput, MissingSequence } from "../build/generated/client/index.js";
 import { createHonoRouter } from "../build/generated/hono/index.js";
 import { handlers } from "./full-stack-handlers.js";
 
@@ -108,6 +108,86 @@ try {
     assert.deepEqual(CreateGenerationOutput.parse(fetchResponse), CreateGenerationOutput.parse(response));
   }
   assert.equal(CreateGenerationOutput.safeParse({ body: { id: "missing" } }).success, false);
+
+  const nativeInput = { limit: 20, includeArchived: false, retryCount: 2 };
+  assert.equal(InspectBindingsInput.safeParse(nativeInput).success, true);
+  for (const input of [
+    { ...nativeInput, limit: "20" },
+    { ...nativeInput, includeArchived: "false" },
+    { ...nativeInput, retryCount: "2" },
+  ]) {
+    assert.equal(InspectBindingsInput.safeParse(input).success, false);
+  }
+  const rawBindings = await fetch(`${baseUrl}/bindings?limit=20&include-archived=false`, {
+    headers: { "X-Retry-Count": "2" },
+  });
+  assert.equal(rawBindings.status, 200);
+  assert.deepEqual(await rawBindings.json(), {
+    limit: 20, includeArchived: false, retryCount: 2, pageSize: 7, useCache: true,
+  });
+
+  for (const includeArchived of [false, true]) {
+    const result = await client.inspectBindings({
+      limit: 20, includeArchived, retryCount: 2, offset: 0, ratio: -1.25e2,
+      enabled: false, pageSize: 10, useCache: false,
+    });
+    assert.deepEqual(result, {
+      limit: 20, includeArchived, retryCount: 2, offset: 0, ratio: -125,
+      enabled: false, pageSize: 10, useCache: false, statusCode: 200,
+    });
+  }
+  assert.deepEqual(await client.inspectBindings({ limit: 1, includeArchived: false, retryCount: 0 }), {
+    limit: 1, includeArchived: false, retryCount: 0, pageSize: 7, useCache: true, statusCode: 200,
+  });
+
+  const invalidBindings: [string, string, string | undefined][] = [
+    ...["", " ", "20\n", "20\r\n", "20x", "1.5", "0x14", "1e1", "NaN", "Infinity", "0", "101"].map(
+      (value): [string, string, string] => ["query", "limit", value],
+    ),
+    ...["", "FALSE", "0", "yes"].map(
+      (value): [string, string, string] => ["query", "include-archived", value],
+    ),
+    ["query", "limit", undefined],
+    ["query", "include-archived", undefined],
+    ["query", "page-size", "101"],
+    ["query", "ratio", "1.2x"],
+    ["query", "ratio", "1.2\n"],
+    ["query", "ratio", "1e999"],
+    ["query", "ratio", "0x10"],
+    ["header", "X-Retry-Count", "2x"],
+    ["header", "X-Retry-Count", undefined],
+    ["header", "X-Enabled", "falsex"],
+    ["header", "X-Use-Cache", "0"],
+  ];
+  for (const [location, name, value] of invalidBindings) {
+    const query = new URLSearchParams({ limit: "20", "include-archived": "false" });
+    const headers = new Headers({ "X-Retry-Count": "2" });
+    const target = location === "query" ? query : headers;
+    if (value === undefined) target.delete(name);
+    else target.set(name, value);
+    const response = await fetch(`${baseUrl}/bindings?${query}`, { headers });
+    assert.equal(response.status, 400, `${location} ${name}=${value}`);
+    const body = await response.json();
+    const memberName = ({
+      "include-archived": "includeArchived", "page-size": "pageSize", "X-Retry-Count": "retryCount",
+      "X-Enabled": "enabled", "X-Use-Cache": "useCache",
+    } as Record<string, string>)[name] ?? name;
+    assert.deepEqual(body.issues.map((issue: { path: string }) => issue.path), [memberName]);
+  }
+
+  const wrongQueryName = await fetch(`${baseUrl}/bindings?limit=20&includeArchived=false`, {
+    headers: { "X-Retry-Count": "2" },
+  });
+  assert.equal(wrongQueryName.status, 400);
+
+  for (const body of [{ bodyCount: "2" }, { bodyEnabled: "false" }]) {
+    const response = await fetch(`${baseUrl}/matches/body-validation/events`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "X-Request-ID": "request", "X-Tenant-ID": "tenant" },
+      body: JSON.stringify({ events: [], ...body }),
+    });
+    assert.equal(response.status, 400);
+  }
 
   const errorResponse = await fetch(`http://127.0.0.1:${address.port}/items/missing-sequence`);
   assert.equal(errorResponse.status, 409);

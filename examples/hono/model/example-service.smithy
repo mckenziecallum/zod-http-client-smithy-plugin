@@ -6,7 +6,7 @@ use aws.protocols#restJson1
 @restJson1
 service ExampleService {
     version: "1.0"
-    operations: [GetItem, Upload, CreateGeneration]
+    operations: [GetItem, Upload, InspectBindings, CreateGeneration]
 }
 
 @http(method: "POST", uri: "/matches/{matchId}/events", code: 200)
@@ -32,6 +32,10 @@ operation Upload {
 
         @required
         events: EventList
+
+        bodyCount: Integer
+
+        bodyEnabled: Boolean
     }
 
     output := {
@@ -96,6 +100,59 @@ structure ErrorDetails {
 structure ItemNotFound {
     @required
     message: String
+}
+
+@range(min: 1, max: 100)
+integer PageLimit
+
+@http(method: "GET", uri: "/bindings", code: 200)
+operation InspectBindings {
+    input := {
+        @required
+        @httpQuery("limit")
+        limit: PageLimit
+
+        @required
+        @httpQuery("include-archived")
+        includeArchived: Boolean
+
+        @required
+        @httpHeader("X-Retry-Count")
+        retryCount: Integer
+
+        @httpQuery("offset")
+        offset: Integer
+
+        @httpQuery("ratio")
+        ratio: Double
+
+        @httpHeader("X-Enabled")
+        enabled: Boolean
+
+        @default(7)
+        @httpQuery("page-size")
+        pageSize: PageLimit
+
+        @default(true)
+        @httpHeader("X-Use-Cache")
+        useCache: Boolean
+    }
+
+    output := {
+        @required
+        limit: Integer
+        @required
+        includeArchived: Boolean
+        @required
+        retryCount: Integer
+        offset: Integer
+        ratio: Double
+        enabled: Boolean
+        @required
+        pageSize: Integer
+        @required
+        useCache: Boolean
+    }
 }
 
 @http(method: "POST", uri: "/generations", code: 202)

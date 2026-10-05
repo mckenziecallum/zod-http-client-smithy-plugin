@@ -8,6 +8,18 @@ export const handlers: HonoHandlers = {
       traceId: input.id === "with-optional" ? "trace-123" : undefined,
     };
   },
+  async inspectBindings(input) {
+    return {
+      limit: input.limit,
+      includeArchived: input.includeArchived,
+      retryCount: input.retryCount,
+      offset: input.offset,
+      ratio: input.ratio,
+      enabled: input.enabled,
+      pageSize: input.pageSize,
+      useCache: input.useCache,
+    };
+  },
   async getItem(input) {
     if (input.path.itemId === "missing-sequence") {
       throw {

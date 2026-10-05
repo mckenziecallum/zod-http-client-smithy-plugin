@@ -7,6 +7,18 @@ import { createHonoRouter, type HonoHandlers } from '../build/generated/hono/ind
 
 const handlers: HonoHandlers = {
   createGeneration: fullStackHandlers.createGeneration,
+  async inspectBindings(input) {
+    return {
+      limit: input.limit,
+      includeArchived: input.includeArchived,
+      retryCount: input.retryCount,
+      offset: input.offset,
+      ratio: input.ratio,
+      enabled: input.enabled,
+      pageSize: input.pageSize,
+      useCache: input.useCache,
+    };
+  },
   async getItem(input) {
     return {
       itemId: input.path.itemId,
@@ -80,17 +92,39 @@ const failingLoggerResponse = await failingLoggerApp.request('/items/example-ite
 assert.equal(failingLoggerResponse.status, 500);
 assert.deepEqual(await failingLoggerResponse.json(), { message: 'InternalServerError', _kind: 'InternalServerError' });
 
-const invalidJsonResponse = await app.request('/matches/example/events', { method: 'POST', body: '{' });
-assert.equal(invalidJsonResponse.status, 400);
-assert.deepEqual(await invalidJsonResponse.json(), {
-  message: 'Request body must be valid JSON.',
-  issues: [{ path: 'body', message: 'Could not parse JSON request body.' }],
-});
-const invalidInputResponse = await app.request('/matches/example/events', { method: 'POST', body: '{}' });
-assert.equal(invalidInputResponse.status, 400);
-const invalidInputBody = await invalidInputResponse.json() as { message: string; issues: unknown[] };
-assert.equal(invalidInputBody.message, 'Request body failed validation.');
-assert.ok(invalidInputBody.issues.length > 0);
+for (const { description, body, message, issuePath } of [
+  { description: 'malformed JSON', body: '{', message: 'Request body must be valid JSON.', issuePath: 'body' },
+  { description: 'missing body member', body: '{}', message: 'Request body failed validation.', issuePath: 'events' },
+  { description: 'wrong body member type', body: '{"events":[123]}', message: 'Request body failed validation.', issuePath: 'events.0' },
+]) {
+  test(`${description} returns request validation details without calling the handler or server logging hook`, async () => {
+    let handlerCalled = false;
+    let logged = false;
+    const validationApp = createHonoRouter({
+      ...handlers,
+      upload(input, context) {
+        handlerCalled = true;
+        return handlers.upload(input, context);
+      },
+    }, {
+      onUnexpectedError() { logged = true; },
+    });
+    const response = await validationApp.request('/matches/example/events', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'X-Request-ID': 'request', 'X-Tenant-ID': 'tenant' },
+      body,
+    });
+    assert.equal(response.status, 400);
+    const responseBody = await response.json();
+    assert.equal(responseBody.message, message);
+    assert.deepEqual(responseBody.issues.map((issue: { path: string }) => issue.path), [issuePath]);
+    if (issuePath === 'body') {
+      assert.deepEqual(responseBody.issues, [{ path: 'body', message: 'Could not parse JSON request body.' }]);
+    }
+    assert.equal(handlerCalled, false);
+    assert.equal(logged, false);
+  });
+}
 
 let modeledErrorLogged = false;
 const modeledErrorApp = createHonoRouter({
@@ -106,13 +140,59 @@ assert.equal(modeledErrorBody.message, 'Item does not exist.');
 assert.equal(modeledErrorBody._kind, 'ItemNotFound');
 assert.equal(modeledErrorLogged, false);
 
-const invalidOutputApp = createHonoRouter({
-  ...handlers,
-  getItem() { return { itemId: 'example', name: undefined! }; },
+for (const { description, name } of [
+  { description: 'numeric name', name: 123 },
+  { description: 'missing name', name: undefined },
+  { description: 'sensitive invalid value', name: { secret: sensitiveMessage } },
+]) {
+  test(`${description} in handler output returns a sanitized 500 and logs validation diagnostics`, async () => {
+    let handlerCalled = false;
+    let loggedError: unknown;
+    let loggedCorrelationId: string | undefined;
+    let loggedPath: string | undefined;
+    const invalidOutputApp = createHonoRouter({
+      ...handlers,
+      getItem(input) {
+        handlerCalled = true;
+        assert.equal(input.path.itemId, 'example-item');
+        // Simulate a runtime defect despite the generated handler's static return type.
+        return { itemId: input.path.itemId, name } as unknown as ReturnType<HonoHandlers['getItem']>;
+      },
+    }, {
+      async onUnexpectedError(error, { correlationId, context }) {
+        loggedError = error;
+        loggedCorrelationId = correlationId;
+        loggedPath = context.req.path;
+      },
+    });
+    const response = await invalidOutputApp.request('/items/example-item');
+    assert.equal(handlerCalled, true);
+    assert.equal(response.status, 500);
+    assert.deepEqual(await response.json(), { message: 'InternalServerError', _kind: 'InternalServerError' });
+    assert.ok(loggedError instanceof z.ZodError);
+    assert.deepEqual(loggedError.issues.map(issue => issue.path), [['name']]);
+    assert.equal(loggedPath, '/items/example-item');
+    assert.match(loggedCorrelationId!, /^[0-9a-f-]{36}$/);
+    assert.equal(response.headers.get('X-Correlation-ID'), loggedCorrelationId);
+  });
+}
+
+test('output validation stays sanitized when the logging hook fails', async () => {
+  let loggedError: unknown;
+  const invalidOutputApp = createHonoRouter({
+    ...handlers,
+    getItem() { return { itemId: 'example', name: 123 } as unknown as ReturnType<HonoHandlers['getItem']>; },
+  }, {
+    async onUnexpectedError(error) {
+      loggedError = error;
+      throw new Error(sensitiveMessage);
+    },
+  });
+  const response = await invalidOutputApp.request('/items/example-item');
+  assert.ok(loggedError instanceof z.ZodError);
+  assert.equal(response.status, 500);
+  assert.deepEqual(await response.json(), { message: 'InternalServerError', _kind: 'InternalServerError' });
 });
-const invalidOutputResponse = await invalidOutputApp.request('/items/example-item');
-assert.equal(invalidOutputResponse.status, 500);
-assert.deepEqual(await invalidOutputResponse.json(), { message: 'InternalServerError', _kind: 'InternalServerError' });
 
 const validHeaders = {
   'content-type': 'application/json',

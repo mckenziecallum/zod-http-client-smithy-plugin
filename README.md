@@ -128,7 +128,7 @@ serve({
 });
 ```
 
-The generated router owns HTTP routing, request parsing, Zod input validation, output validation, and modeled Smithy error status mapping.
+The generated router owns HTTP routing, request parsing, Zod input validation, output validation, and modeled Smithy error status mapping. Scalar query and header bindings decode decimal integers, finite decimal numbers, and exact `true`/`false` values before native Zod validation. Malformed values return 400; constraints, requiredness, and defaults still apply. Declared query wire names are used by both servers and clients. Client inputs and JSON body fields retain native types.
 
 Handlers return a flat object using Smithy member names, including members bound with `@httpHeader`. Each operation with output exports a `{Operation}Result` schema and `{Operation}ResultType` for this handler API. The router validates that result, emits body members as JSON, and emits header members under their declared HTTP names. Required header members must be present; optional headers are omitted when undefined. A missing or invalid required output member produces HTTP 500.
 
