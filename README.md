@@ -127,7 +127,7 @@ serve({
 });
 ```
 
-The generated router owns HTTP routing, request parsing, Zod input validation, output validation, and modeled Smithy error status mapping.
+The generated router owns HTTP routing, request parsing, Zod input validation, output validation, and modeled Smithy error status mapping. Scalar query and header bindings decode decimal integers, finite decimal numbers, and exact `true`/`false` values before native Zod validation. Malformed values return 400; constraints, requiredness, and defaults still apply. Declared query wire names are used by both servers and clients. Client inputs and JSON body fields retain native types.
 
 Throw a modeled error using `_kind` (or `name`) matching the Smithy error shape and include its required members. The router validates the error and serializes modeled fields, stripping unmodeled properties, including those in nested structures. It preserves `_kind` and, for `aws.protocols#restJson1` services, adds the `__type` discriminator for Smithy client interoperability. Invalid modeled errors return a generic 500 response; request validation errors retain their existing 400 responses.
 
