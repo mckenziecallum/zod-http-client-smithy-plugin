@@ -59,6 +59,7 @@ class OperationDescriptorGenerator(
             successStatusCode = httpTrait?.code ?: 200,
             inputSchema = inputSchema,
             outputSchema = outputSchema,
+            outputResultSchema = outputShape?.let { schemaGenerator.generateOutputResultSchema(model, operation, it) },
             inputBindings = inputBindings,
             outputBindings = outputBindings,
             errors = errors,

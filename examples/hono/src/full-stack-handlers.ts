@@ -1,6 +1,13 @@
 import type { HonoHandlers } from "../build/generated/hono/index.js";
 
 export const handlers: HonoHandlers = {
+  async createGeneration(input) {
+    return {
+      id: input.id,
+      location: input.id === "missing-required" ? undefined! : `/generations/${input.id}`,
+      traceId: input.id === "with-optional" ? "trace-123" : undefined,
+    };
+  },
   async inspectBindings(input) {
     return {
       limit: input.limit,

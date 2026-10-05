@@ -35,6 +35,9 @@ class ZodHonoSmithyPlugin : SmithyBuildPlugin {
 
                 descriptors.forEach { descriptor ->
                     fileManifest.writeFile("${descriptor.operationName}Input.ts", descriptor.inputSchema.render())
+                    descriptor.outputResultSchema?.let { resultSchema ->
+                        fileManifest.writeFile("${descriptor.operationName}Result.ts", resultSchema.render())
+                    }
                     descriptor.outputSchema?.let { outputSchema ->
                         fileManifest.writeFile("${descriptor.operationName}Output.ts", outputSchema.render())
                     }

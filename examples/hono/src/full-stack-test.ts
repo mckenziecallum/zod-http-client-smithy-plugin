@@ -1,7 +1,9 @@
+import axios from "axios";
+import { z } from "zod";
 import { serve } from "@hono/node-server";
 import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
-import { createFetchClient, InspectBindingsInput, MissingSequence } from "../build/generated/client/index.js";
+import { createAxiosClient, createFetchClient, CreateGenerationOutput, fromAxios, fromFetch, InspectBindingsInput, MissingSequence } from "../build/generated/client/index.js";
 import { createHonoRouter } from "../build/generated/hono/index.js";
 import { handlers } from "./full-stack-handlers.js";
 
@@ -22,7 +24,16 @@ const app = createHonoRouter({
   },
 });
 const server = serve({
-  fetch: app.fetch,
+  async fetch(request) {
+    // Exercise client validation against a peer that omits a required wire header.
+    if (new URL(request.url).pathname === "/generations") {
+      const input = await request.clone().json() as { id: string };
+      if (input.id === "missing-response-header") {
+        return Response.json({ id: input.id }, { status: 202 });
+      }
+    }
+    return app.fetch(request);
+  },
   hostname: "127.0.0.1",
   port: 0,
 });
@@ -33,8 +44,71 @@ try {
   });
 
   const address = server.address() as AddressInfo;
-  const client = createFetchClient(`http://127.0.0.1:${address.port}`);
   const baseUrl = `http://127.0.0.1:${address.port}`;
+  const generationResponse = await fetch(`${baseUrl}/generations`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id: "gen_123" }),
+  });
+  assert.equal(generationResponse.status, 202);
+  assert.equal(generationResponse.headers.get("Location"), "/generations/gen_123");
+  assert.equal(generationResponse.headers.get("X-Trace-ID"), null);
+  assert.deepEqual(await generationResponse.json(), { id: "gen_123" });
+
+  const client = createFetchClient(`http://127.0.0.1:${address.port}`);
+  const axiosClient = createAxiosClient(axios.create({ baseURL: baseUrl }));
+  for (const api of [client, axiosClient]) {
+    assert.deepEqual(await api.createGeneration({ id: "gen_123" }), {
+      id: "gen_123",
+      location: "/generations/gen_123",
+      statusCode: 202,
+    });
+    assert.deepEqual(await api.createGeneration({ id: "with-optional" }), {
+      id: "with-optional",
+      location: "/generations/with-optional",
+      traceId: "trace-123",
+      statusCode: 202,
+    });
+    await assert.rejects(api.createGeneration({ id: "missing-response-header" }), z.ZodError);
+  }
+  const optionalResponse = await fetch(`${baseUrl}/generations`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id: "with-optional" }),
+  });
+  assert.equal(optionalResponse.status, 202);
+  assert.equal(optionalResponse.headers.get("x-trace-id"), "trace-123");
+  assert.deepEqual(await optionalResponse.json(), { id: "with-optional" });
+
+  const invalidOutputResponse = await fetch(`${baseUrl}/generations`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id: "missing-required" }),
+  });
+  assert.equal(invalidOutputResponse.status, 500);
+  assert.equal(invalidOutputResponse.headers.get("Location"), null);
+  assert.deepEqual(await invalidOutputResponse.json(), { message: "InternalServerError", _kind: "InternalServerError" });
+
+  // Axios adapters may preserve header casing, unlike native Fetch Headers.
+  for (const name of ["Location", "location", "LoCaTiOn"]) {
+    const response = fromAxios({
+      data: { id: "mixed-case" },
+      headers: { [name]: "/generations/mixed-case", "x-TrAcE-iD": "mixed-trace" },
+      status: 202,
+      statusText: "Accepted",
+      config: { headers: new axios.AxiosHeaders() },
+    });
+    assert.deepEqual(CreateGenerationOutput.parse(response), {
+      id: "mixed-case", location: "/generations/mixed-case", traceId: "mixed-trace", statusCode: 202,
+    });
+    const fetchResponse = await fromFetch(Response.json({ id: "mixed-case" }, {
+      status: 202,
+      headers: { [name]: "/generations/mixed-case", "x-TrAcE-iD": "mixed-trace" },
+    }));
+    assert.deepEqual(CreateGenerationOutput.parse(fetchResponse), CreateGenerationOutput.parse(response));
+  }
+  assert.equal(CreateGenerationOutput.safeParse({ body: { id: "missing" } }).success, false);
+
   const nativeInput = { limit: 20, includeArchived: false, retryCount: 2 };
   assert.equal(InspectBindingsInput.safeParse(nativeInput).success, true);
   for (const input of [

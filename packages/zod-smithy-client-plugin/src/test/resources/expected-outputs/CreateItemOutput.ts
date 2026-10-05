@@ -7,12 +7,12 @@ export const CreateItemOutput = z.object({
   createdAt: z.string()
 }),
   headers: z.object({
-  'X-Request-ID': z.string().optional()
+  'x-request-id': z.string().optional()
 }).optional(),
   statusCode: z.number().optional()
 }).transform((v) => ({
   ...v.body,
-  ...(v.headers?.['X-Request-ID'] !== undefined && { requestId: v.headers?.['X-Request-ID'] }),
+  ...(v.headers?.['x-request-id'] !== undefined && { requestId: v.headers?.['x-request-id'] }),
   ...(v.statusCode !== undefined && { statusCode: v.statusCode }),
 }));
 
