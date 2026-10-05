@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import { z } from 'zod';
 
 import test from 'node:test';
+import { handlers as fullStackHandlers } from './full-stack-handlers.js';
 import { createHonoRouter, type HonoHandlers } from '../build/generated/hono/index.js';
 
 const handlers: HonoHandlers = {
+  getContent: fullStackHandlers.getContent,
   async getItem(input) {
     return {
       itemId: input.path.itemId,

@@ -6,7 +6,7 @@ use aws.protocols#restJson1
 @restJson1
 service ExampleService {
     version: "1.0"
-    operations: [GetItem, Upload]
+    operations: [GetItem, Upload, GetContent]
 }
 
 @http(method: "POST", uri: "/matches/{matchId}/events", code: 200)
@@ -97,3 +97,31 @@ structure ItemNotFound {
     @required
     message: String
 }
+
+// Content is served by the redirect target, outside the generated JSON API.
+@suppress(["HttpResponseCodeSemantics"])
+@readonly
+@http(method: "GET", uri: "/content/{contentId}", code: 303)
+operation GetContent {
+    errors: [ItemNotFound]
+    input := {
+        @required
+        @httpLabel
+        contentId: String
+
+        @required
+        @httpHeader("X-Content-Access")
+        accessToken: String
+    }
+    output := {
+        @required
+        @httpHeader("Location")
+        location: ContentLocation
+
+        @httpHeader("Cache-Control")
+        cacheControl: String
+    }
+}
+
+@length(min: 1)
+string ContentLocation

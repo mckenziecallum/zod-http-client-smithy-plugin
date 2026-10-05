@@ -34,8 +34,13 @@ class HonoFileGenerator {
                 appendLine("export type HonoHandlers = {")
                 operations.forEach { operation ->
                     val outputType =
-                        operation.outputSchema?.let { "z.output<typeof ${operation.operationName}Output>" }
-                            ?: "unknown"
+                        operation.outputSchema?.let {
+                            val schemaType = "z.output<typeof ${operation.operationName}Output>"
+                            val requiredHeaders =
+                                operation.outputBindings?.headerParameters.orEmpty().values
+                                    .filter { it.isRequired }.joinToString(" | ") { "'${it.member!!.memberName}'" }
+                            if (requiredHeaders.isEmpty()) schemaType else "$schemaType & Required<Pick<$schemaType, $requiredHeaders>>"
+                        } ?: "unknown"
                     appendLine(
                         "  ${operation.methodName}(input: z.output<typeof ${operation.operationName}Input>, c: Context): " +
                             "$outputType | Promise<$outputType>;",
@@ -64,8 +69,26 @@ class HonoFileGenerator {
                     )
                     appendLine("      const output = await handlers.${operation.methodName}(input, c);")
                     if (operation.outputSchema != null) {
-                        appendLine("      const body = ${operation.operationName}Output.parse({ body: output, headers: {} });")
-                        appendLine("      return c.json(body, ${operation.successStatusCode} as const);")
+                        val headers = operation.outputBindings?.headerParameters.orEmpty()
+                        val headerEntries =
+                            headers.entries.joinToString(", ") { (headerName, parameter) ->
+                                "'$headerName': output.${parameter.member!!.memberName}"
+                            }
+                        val headerLiteral = if (headers.isEmpty()) "{}" else "{ $headerEntries }"
+                        appendLine("      const body = ${operation.operationName}Output.parse({ body: output, headers: $headerLiteral });")
+                        headers.forEach { (headerName, parameter) ->
+                            val memberName = parameter.member!!.memberName
+                            appendLine("      if (body.$memberName !== undefined) c.header('$headerName', String(body.$memberName));")
+                        }
+                        if (operation.isRedirect) {
+                            appendLine("      return c.body(null, ${operation.successStatusCode} as const);")
+                        } else if (headers.isNotEmpty()) {
+                            val headerMembers = headers.values.joinToString(", ") { it.member!!.memberName }
+                            appendLine("      const { $headerMembers, ...jsonBody } = body;")
+                            appendLine("      return c.json(jsonBody, ${operation.successStatusCode} as const);")
+                        } else {
+                            appendLine("      return c.json(body, ${operation.successStatusCode} as const);")
+                        }
                     } else {
                         appendLine("      return c.body(null, ${operation.successStatusCode} as const);")
                     }

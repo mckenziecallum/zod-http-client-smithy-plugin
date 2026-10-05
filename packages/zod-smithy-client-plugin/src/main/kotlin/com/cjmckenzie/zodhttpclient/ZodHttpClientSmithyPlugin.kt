@@ -48,7 +48,12 @@ class ZodHttpClientSmithyPlugin : SmithyBuildPlugin {
                     }
                 }
 
-                val clientMethods = descriptors.map { it.toClientMethod() }
+                val clientMethods = descriptors.filterNot { it.isRedirect }.map { it.toClientMethod() }
+                descriptors.filter { it.isRedirect }.forEach {
+                    logger.info(
+                        "${it.operationName}: redirect; use its input schema with navigation or raw fetch. No JSON client method.",
+                    )
+                }
                 val operationNames = descriptors.map { it.operationName }
                 val outputOperationNames = descriptors.filter { it.outputSchema != null }.map { it.operationName }
                 val allErrors = descriptors.flatMap { it.errors }
@@ -62,7 +67,7 @@ class ZodHttpClientSmithyPlugin : SmithyBuildPlugin {
 
                 val hasErrors = uniqueErrors.isNotEmpty()
 
-                if (clientMethods.isNotEmpty()) {
+                if (descriptors.isNotEmpty()) {
                     if ("axios" in clients) {
                         fileGenerator.generateAxiosClientFile(fileManifest, clientMethods, hasErrors)
                     }

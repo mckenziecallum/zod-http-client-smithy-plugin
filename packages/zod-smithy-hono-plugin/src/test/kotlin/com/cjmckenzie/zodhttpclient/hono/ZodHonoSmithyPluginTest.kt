@@ -36,7 +36,9 @@ class ZodHonoSmithyPluginTest {
             .contains("{ memberName: 'requestId', headerName: 'X-Request-ID' }")
             .contains("{ memberName: 'retryCount', headerName: 'X-Retry-Count' }")
             .contains("input[memberName] = c.req.header(headerName);")
-            .contains("CreateItemOutput.parse({ body: output, headers: {} })")
+            .contains("CreateItemOutput.parse({ body: output, headers: { 'X-Request-ID': output.requestId } })")
+            .contains("c.header('X-Request-ID', String(body.requestId))")
+            .contains("const { requestId, ...jsonBody } = body;")
             .contains("return c.json({ ...parsed.data, _kind: 'NotFoundException' }, 404 as const);")
             .doesNotContain("__type")
     }
